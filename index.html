@@ -410,23 +410,89 @@ const ROLE_NAME={admin:'管理員',member:'成員',viewer:'唯讀'};
 async function api(action, payload={}){
   if(DEMO) return demoApi(action, payload);
   const token = liff.getAccessToken();
-  const res = await fetch(CONFIG.GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body: JSON.stringify(Object.assign({action, token}, payload)) });
-  const j = await res.json();
+  let res, text, j;
+  try{ res = await fetch(CONFIG.GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify(Object.assign({action, token}, payload)) }); }
+  catch(e){ const x=new Error('連不到後端（Apps Script）。請確認 GAS_URL 正確、手機網路正常。'); x.code='NETWORK'; throw x; }
+  text = await res.text();
+  try{ j = JSON.parse(text); }
+  catch(e){ const x=new Error('後端回傳的不是帳本資料。通常是 Apps Script 部署時「誰可以存取」沒有選「任何人」，或 GAS_URL 不是以 /exec 結尾的網址。'); x.code='NOT_JSON'; throw x; }
   if(!j.ok){
-    if(j.code==='AUTH_EXPIRED' || j.code==='AUTH'){ liff.logout(); liff.login({redirectUri: location.href}); throw new Error('重新登入中…'); }
+    // 只在「登入過期」時自動重新登入一次，避免無限循環
+    if(j.code==='AUTH_EXPIRED' && !reloginTriedRecently()){
+      markRelogin(); liff.logout(); liff.login({redirectUri: location.href.split('#')[0]});
+      const x=new Error('登入已過期，重新登入中…'); x.code='RELOGIN'; throw x;
+    }
     const e=new Error(j.message); e.code=j.code; throw e;
   }
+  try{ sessionStorage.removeItem('cl_relogin'); }catch(e){}
   return j.data;
 }
+function reloginTriedRecently(){ try{ const t=Number(sessionStorage.getItem('cl_relogin')||0); return Date.now()-t < 120000; }catch(e){ return true; } }
+function markRelogin(){ try{ sessionStorage.setItem('cl_relogin', String(Date.now())); }catch(e){} }
+
+/* ═══════════ 連線診斷（登入或連線失敗時顯示） ═══════════ */
+async function diagnose(){
+  const rows=[], add=(k,v,good)=>rows.push(`<div class="kv"><span>${good===false?'❌':good?'✅':'・'} ${esc(k)}</span><span>${esc(v)}</span></div>`);
+  add('LIFF ID', CONFIG.LIFF_ID || '（未填）', !!CONFIG.LIFF_ID);
+  add('GAS 網址', CONFIG.GAS_URL ? CONFIG.GAS_URL.replace(/^https:\/\/script\.google\.com\/macros\/s\/(.{6}).*(\/\w+)$/,'…/s/$1…$2') : '（未填）', /\/exec$/.test(CONFIG.GAS_URL));
+  const liffOk = typeof liff!=='undefined';
+  add('LINE SDK', liffOk?'已載入':'載入失敗', liffOk);
+  if(liffOk){
+    let inClient='?', logged='?', tok=false, ctx='';
+    try{ inClient = liff.isInClient()?'是（在 LINE 裡開啟）':'否（外部瀏覽器）'; }catch(e){}
+    try{ logged = liff.isLoggedIn()?'是':'否'; tok=!!liff.getAccessToken(); }catch(e){ logged='尚未初始化'; }
+    try{ const c=liff.getContext(); ctx=c?c.type:''; }catch(e){}
+    add('在 LINE App 裡', inClient);
+    add('已登入 LINE', logged, logged==='是');
+    add('取得登入權杖', tok?'有':'沒有', tok);
+    if(ctx) add('開啟位置', ctx);
+    try{ const id=liff.id || ''; if(id) add('LIFF 實際 ID', id, id===CONFIG.LIFF_ID); }catch(e){}
+  }
+  if(CONFIG.GAS_URL){
+    try{ const r=await fetch(CONFIG.GAS_URL); const t=await r.text(); let j=null; try{ j=JSON.parse(t); }catch(e){}
+      if(j && j.app==='care-ledger'){ add('後端連線', '正常（v'+j.version+'）', true); if(j.channelIdSet===false) add('LINE_CHANNEL_ID', '後端還沒設定', false); }
+      else add('後端連線', '回應不是帳本後端（檢查部署權限「任何人」與 /exec 網址）', false);
+    }catch(e){ add('後端連線', '連不到', false); }
+  }
+  add('網頁網址', location.origin + location.pathname);
+  return rows.join('');
+}
+function showFatal(e){
+  const tips = {
+    CHANNEL_MISMATCH:'照上面的訊息改好 LINE_CHANNEL_ID，存檔後回來按「重新整理」。',
+    CONFIG:'到 Apps Script 新增指令碼屬性 LINE_CHANNEL_ID（LINE Developers 的 Channel ID）。',
+    AUTH_EXPIRED:'按「重新登入」。如果還是不行，檢查 LINE Login channel 是否已改成 Published。',
+    NO_TOKEN:'請從 LINE 聊天室裡點帳本連結（https://liff.line.me/…）開啟，不要直接開 GitHub 網址。',
+    NOT_JSON:'Apps Script →「部署」→「管理部署作業」→ 確認「誰可以存取：任何人」，並使用 /exec 結尾的網址。',
+    PROFILE:'LINE Developers → LIFF → Scopes 勾選 profile 和 openid，存檔後重新開啟。',
+    NETWORK:'確認網路，以及 index.html 裡的 GAS_URL 有沒有貼錯。',
+    LIFF_INIT:'確認 index.html 的 LIFF_ID 正確，而且 LIFF 的 Endpoint URL 就是這個網頁的網址（含資料夾路徑）。'
+  };
+  $('#nav').classList.add('hidden');
+  $('#main').innerHTML = `<div class="card warn"><h3>⚠️ 無法開啟帳本</h3><p style="margin:0">${esc(e.message||e)}</p>
+      ${tips[e.code]?`<p class="hint" style="margin-bottom:0">👉 ${esc(tips[e.code])}</p>`:''}</div>
+    <div class="row2" style="margin-bottom:12px"><button class="btn ghost" onclick="location.reload()">重新整理</button>
+      <button class="btn ghost" id="fatalRelogin">重新登入</button></div>
+    <div class="card"><h3>連線診斷</h3><div id="diag"><div class="spinner"></div></div>
+      <p class="hint">截圖這個畫面傳給管理員，就能看出是哪個設定有問題。錯誤代碼：${esc(e.code||'-')}</p></div>`;
+  $('#fatalRelogin').onclick=()=>{ try{ sessionStorage.removeItem('cl_relogin'); liff.logout(); liff.login({redirectUri: location.href.split('#')[0]}); }catch(x){ location.reload(); } };
+  diagnose().then(h=>{ $('#diag').innerHTML=h; });
+}
+
 async function reload(){ Object.assign(S, await api('list')); S.preview=null; render(); }
 
 /* ═══════════ 啟動 ═══════════ */
 async function start(){
   try{
     if(!DEMO){
-      await liff.init({ liffId: CONFIG.LIFF_ID });
-      if(!liff.isLoggedIn()){ liff.login({redirectUri: location.href}); return; }
+      if(typeof liff==='undefined'){ const x=new Error('LINE SDK 載入失敗，請確認網路後重新整理。'); x.code='LIFF_INIT'; throw x; }
+      try{ await liff.init({ liffId: CONFIG.LIFF_ID }); }
+      catch(e){ const x=new Error('LIFF 初始化失敗：'+(e.message||e)); x.code='LIFF_INIT'; throw x; }
+      if(!liff.isLoggedIn()){
+        if(reloginTriedRecently()){ const x=new Error('LINE 登入沒有成功完成。'); x.code='AUTH_EXPIRED'; throw x; }
+        markRelogin(); liff.login({redirectUri: location.href.split('#')[0]}); return;
+      }
     }
     Object.assign(S, await api('me'));
     renderWho();
@@ -436,8 +502,8 @@ async function start(){
     render();
     if(!S.me.nameSet) askName();
   }catch(e){
-    $('#main').innerHTML = `<div class="center"><div class="big">⚠️</div><p>${esc(e.message||e)}</p>
-      <button class="btn ghost" onclick="location.reload()">重新整理</button></div>`;
+    if(e.code==='RELOGIN') return;
+    showFatal(e);
   }
 }
 function askName(){
@@ -1285,7 +1351,10 @@ function computeContribution(fundEntries, settlements, members, groupWeights) {
 
 /* ───────────── 入口 ───────────── */
 
-function doGet() { return json_({ ok: true, app: 'care-ledger', version: 2, time: new Date().toISOString() }); }
+function doGet() {
+  return json_({ ok: true, app: 'care-ledger', version: 2, time: new Date().toISOString(),
+    channelIdSet: !!String(prop_('LINE_CHANNEL_ID') || '').trim() });
+}
 
 function doPost(e) {
   try {
@@ -1317,7 +1386,7 @@ var ACTIONS = {
 /* ───────────── 身分驗證 ───────────── */
 
 function auth_(token) {
-  if (!token) throw err_('AUTH', '請先登入 LINE');
+  if (!token) throw err_('NO_TOKEN', '沒有取得 LINE 登入資訊。請從 LINE 裡點帳本連結開啟，或在瀏覽器重新登入。');
   var cache = CacheService.getScriptCache();
   var key = 'tk_' + Utilities.base64EncodeWebSafe(
     Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, token)).slice(0, 40);
@@ -1325,16 +1394,24 @@ function auth_(token) {
   if (cached) {
     profile = JSON.parse(cached);
   } else {
-    var channelId = prop_('LINE_CHANNEL_ID');
-    if (!channelId) throw err_('CONFIG', '尚未設定 LINE_CHANNEL_ID');
+    var channelId = String(prop_('LINE_CHANNEL_ID') || '').replace(/\s/g, '');
+    if (!channelId) throw err_('CONFIG', '後端尚未設定 LINE_CHANNEL_ID。請到 Apps Script「專案設定 → 指令碼屬性」新增。');
     var v = UrlFetchApp.fetch('https://api.line.me/oauth2/v2.1/verify?access_token=' +
       encodeURIComponent(token), { muteHttpExceptions: true });
-    if (v.getResponseCode() !== 200) throw err_('AUTH_EXPIRED', '登入已過期，請重新登入');
+    if (v.getResponseCode() !== 200) {
+      var why = ''; try { why = JSON.parse(v.getContentText()).error_description || ''; } catch (e) {}
+      throw err_('AUTH_EXPIRED', 'LINE 登入驗證失敗（' + v.getResponseCode() + (why ? '：' + why : '') + '）');
+    }
     var vj = JSON.parse(v.getContentText());
-    if (String(vj.client_id) !== String(channelId)) throw err_('AUTH', '登入來源不符');
+    if (String(vj.client_id) !== channelId) {
+      throw err_('CHANNEL_MISMATCH', '後端設定的 LINE_CHANNEL_ID 是「' + channelId + '」，但這個 LIFF 屬於 Channel ID「' + vj.client_id +
+        '」。請到 Apps Script「專案設定 → 指令碼屬性」把 LINE_CHANNEL_ID 改成 ' + vj.client_id + '，存檔後重新整理帳本即可（不用重新部署）。');
+    }
     var p = UrlFetchApp.fetch('https://api.line.me/v2/profile', {
       headers: { Authorization: 'Bearer ' + token }, muteHttpExceptions: true });
-    if (p.getResponseCode() !== 200) throw err_('AUTH_EXPIRED', '登入已過期，請重新登入');
+    if (p.getResponseCode() !== 200) {
+      throw err_('PROFILE', '讀不到 LINE 個人資料（' + p.getResponseCode() + '）。請確認 LIFF 的 Scopes 有勾選 profile。');
+    }
     profile = JSON.parse(p.getContentText());
     cache.put(key, JSON.stringify(profile), Math.min(600, Math.max(60, (vj.expires_in || 600) - 30)));
   }
