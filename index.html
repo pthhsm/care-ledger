@@ -1,0 +1,2078 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>爸媽照護帳本</title>
+<script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+:root{
+  --bg:#f4f6f8; --card:#fff; --ink:#1f2933; --sub:#66788a; --line:#e3e8ee;
+  --pri:#2f6fdf; --pri-soft:#e7efff; --ok:#1e9e62; --ok-soft:#e3f6ec;
+  --warn:#d9822b; --warn-soft:#fdf0e1; --bad:#d64545; --bad-soft:#fdeaea; --radius:14px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+  font-size:16px;line-height:1.45}
+button{font:inherit;cursor:pointer}
+input,select,textarea{font:inherit;color:inherit}
+.hidden{display:none!important}
+header{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);
+  padding:calc(10px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;gap:10px}
+header h1{font-size:18px;margin:0;flex:1}
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--pri-soft);object-fit:cover;
+  display:inline-flex;align-items:center;justify-content:center;font-size:14px;color:var(--pri);flex:none}
+main{padding:12px 12px 100px;max-width:640px;margin:0 auto}
+.demo{background:#fff7d6;border:1px solid #f0d77a;border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:14px}
+.demo select{padding:2px 6px;border-radius:6px;border:1px solid #d8c26a;background:#fff}
+
+.seg{display:flex;background:#e6eaef;border-radius:10px;padding:3px;margin-bottom:10px}
+.seg button{flex:1;border:0;background:none;border-radius:8px;padding:7px 0;font-size:15px;color:var(--sub)}
+.seg button.on{background:#fff;color:var(--ink);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.monthbar{display:flex;align-items:center;gap:8px;margin:4px 0 10px}
+.monthbar .m{flex:1;text-align:center;font-weight:600;font-size:17px}
+.iconbtn{border:1px solid var(--line);background:var(--card);border-radius:10px;width:40px;height:38px;font-size:18px}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:8px;scrollbar-width:none}
+.chip{flex:none;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:5px 12px;font-size:14px;color:var(--sub)}
+.chip.on{background:var(--pri);border-color:var(--pri);color:#fff}
+.total{background:var(--card);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:baseline}
+.total b{font-size:24px}
+.total small{color:var(--sub)}
+
+.dayhead{font-size:13px;color:var(--sub);margin:14px 4px 6px;display:flex;justify-content:space-between}
+.rec{background:var(--card);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;display:flex;gap:12px;align-items:flex-start;border:1px solid transparent}
+.rec.mine{border-left:4px solid var(--pri)}
+.rec .body{flex:1;min-width:0}
+.rec .t{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rec .meta{font-size:13px;color:var(--sub);margin-top:2px}
+.rec .note{font-size:13px;color:var(--sub);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rec .amt{font-weight:700;font-size:17px;white-space:nowrap;text-align:right}
+.amt.in{color:var(--ok)} .amt.out{color:var(--bad)}
+.tag{display:inline-block;font-size:12px;padding:1px 8px;border-radius:999px;background:var(--pri-soft);color:var(--pri);margin-right:4px}
+.tag.mom{background:#fbe9f3;color:#b0407a}.tag.both{background:#efeaf9;color:#6b4fbb}
+.tag.src{background:var(--ok-soft);color:var(--ok)}
+.st{display:inline-block;font-size:11px;padding:1px 6px;border-radius:6px;margin-top:4px}
+.st-待對帳{background:var(--warn-soft);color:var(--warn)}
+.st-部分結清{background:#eef0ff;color:#5a5fd6}
+.st-已結清{background:var(--ok-soft);color:var(--ok)}
+.empty{text-align:center;color:var(--sub);padding:40px 0}
+
+nav{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--card);border-top:1px solid var(--line);
+  display:flex;padding:6px 8px calc(6px + env(safe-area-inset-bottom))}
+nav button{flex:1;border:0;background:none;color:var(--sub);font-size:12px;padding:4px 0;display:flex;flex-direction:column;align-items:center;gap:2px}
+nav button .i{font-size:20px;line-height:1}
+nav button.on{color:var(--pri);font-weight:600}
+nav .add{flex:none;width:64px;height:64px;margin-top:-24px;border-radius:50%;background:var(--pri);color:#fff;font-size:30px;
+  box-shadow:0 6px 16px rgba(47,111,223,.35);justify-content:center}
+
+.mask{position:fixed;inset:0;background:rgba(15,23,32,.45);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--card);width:100%;max-width:640px;border-radius:18px 18px 0 0;max-height:92vh;overflow:auto;
+  padding:16px 16px calc(20px + env(safe-area-inset-bottom))}
+.sheet h2{font-size:18px;margin:0 0 12px;display:flex;justify-content:space-between;align-items:center}
+.sheet h2 button{border:0;background:none;font-size:22px;color:var(--sub)}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:13px;color:var(--sub);margin-bottom:4px}
+.field input,.field select,.field textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#fff}
+.field textarea{min-height:64px;resize:vertical}
+.amount-input{font-size:26px!important;font-weight:700}
+.catgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.catgrid.c3{grid-template-columns:repeat(3,1fr)}
+.catgrid button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 0;font-size:14px}
+.catgrid button.on{background:var(--pri);border-color:var(--pri);color:#fff}
+.btn{display:block;width:100%;border:0;border-radius:12px;padding:13px;font-size:16px;font-weight:600;background:var(--pri);color:#fff}
+.btn.ghost{background:var(--pri-soft);color:var(--pri)}
+.btn.green{background:var(--ok)}
+.btn.danger{background:var(--bad-soft);color:var(--bad)}
+.btn:disabled{opacity:.45}
+.row2{display:flex;gap:8px}
+.row2>*{flex:1}
+.kv{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:15px;gap:12px}
+.kv span:first-child{color:var(--sub);flex:none}
+.kv span:last-child{text-align:right;word-break:break-word}
+.receipt-img{width:100%;border-radius:10px;margin-top:10px;border:1px solid var(--line)}
+.preview{max-height:160px;border-radius:8px;margin-top:6px;display:block}
+.hint{font-size:13px;color:var(--sub);margin:6px 0}
+
+.card{background:var(--card);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px}
+.card h3{font-size:16px;margin:0 0 10px;display:flex;justify-content:space-between;align-items:center}
+.card.warn{background:var(--warn-soft)} .card.warn .hint{color:#8a5a1d}
+.card.fund{background:linear-gradient(135deg,#1f5fcf,#3f86f0);color:#fff}
+.card.fund .sub{opacity:.85;font-size:13px}
+.card.fund .bal{font-size:32px;font-weight:700;margin:2px 0 8px}
+.card.fund .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:13px}
+.card.fund .grid b{display:block;font-size:15px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:8px 3px;border-bottom:1px solid var(--line);text-align:right}
+th:first-child,td:first-child{text-align:left}
+th{font-size:12px;color:var(--sub);font-weight:500}
+.pos{color:var(--ok);font-weight:600}.neg{color:var(--bad);font-weight:600}
+.bar{height:8px;border-radius:4px;background:var(--pri);margin-top:3px}
+.catrow{margin-bottom:9px;font-size:14px}
+.catrow .l{display:flex;justify-content:space-between}
+.transfer{background:var(--pri-soft);border-radius:10px;padding:10px 12px;margin-bottom:6px;font-size:15px;display:flex;justify-content:space-between}
+.transfer.fundt{background:var(--ok-soft)}
+.mem{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.mem .n{flex:1;min-width:0}
+.mem .n small{display:block;color:var(--sub);font-size:12px}
+.mini{border:1px solid var(--line);background:#fff;border-radius:8px;padding:4px 10px;font-size:13px;margin-left:4px}
+.mini.pri{background:var(--pri);border-color:var(--pri);color:#fff}
+.badge{font-size:11px;padding:1px 6px;border-radius:6px;background:#eee;color:#555;margin-left:4px}
+.mode{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px;display:flex;gap:10px;align-items:flex-start}
+.mode.on{border-color:var(--pri);background:var(--pri-soft)}
+.mode input{margin-top:4px;width:18px;height:18px;flex:none}
+.mode b{display:block}
+.mode small{color:var(--sub);font-size:13px}
+.hist{border-bottom:1px solid var(--line);padding:10px 0}
+.hist .h{display:flex;justify-content:space-between;align-items:center}
+.hist small{color:var(--sub)}
+.center{text-align:center;padding:60px 20px}
+.center .big{font-size:48px}
+.toast{position:fixed;left:50%;top:76px;transform:translateX(-50%);background:rgba(20,28,36,.92);color:#fff;
+  padding:10px 18px;border-radius:999px;font-size:14px;z-index:50;max-width:86%;text-align:center}
+.spinner{width:28px;height:28px;border:3px solid var(--pri-soft);border-top-color:var(--pri);border-radius:50%;animation:sp 1s linear infinite;margin:0 auto}
+@keyframes sp{to{transform:rotate(360deg)}}
+.bookbar{display:flex;justify-content:space-between;align-items:center;width:100%;border:0;border-radius:12px;padding:10px 14px;margin-bottom:10px;
+  background:#e7efff;color:#1f3f8f;font-size:15px;text-align:left}
+.bookbar.mom{background:#fbe9f3;color:#8a2d5d}
+.bookbar .sw{font-size:13px;opacity:.8}
+.bookpick{display:block;width:100%;text-align:left;border:1px solid var(--line);background:#fff;border-radius:12px;padding:12px;margin-bottom:8px}
+.bookpick.on{border-color:var(--pri);background:var(--pri-soft)}
+.bookpick small{display:block;color:var(--sub);font-size:13px;margin-top:2px}
+.catgrid.c2{grid-template-columns:repeat(2,1fr)}
+.catgrid.c2 button{font-size:13px;padding:9px 4px}
+.check{display:flex;gap:8px;align-items:center;font-size:14px;margin:4px 0 14px;color:var(--ink)}
+.check input{width:20px;height:20px}
+.rec.flat{padding:10px 4px;margin:0;border-radius:0;border-bottom:1px solid var(--line)}
+.transfer.claim{background:#f3eefb}
+.tag.dad{background:#e8f1ec;color:#2b7a55}
+.badge.lockb{background:#fff1d6;color:#9a6a12}
+.card.fund.dad{background:linear-gradient(135deg,#2b7a55,#3fa877)}
+nav .add.off{background:#b9c3d0;box-shadow:none}
+.inp{flex:1;border:1px solid var(--line);border-radius:10px;padding:10px}
+</style>
+<style>
+.bookbar{display:flex;align-items:center;gap:8px;background:var(--card);border-radius:var(--radius);padding:10px 14px;margin-bottom:10px;border:1px solid var(--line)}
+.bookbar .bn{flex:1;font-weight:700;font-size:16px}
+.bookbar small{color:var(--sub);font-weight:400}
+.closedbar{background:#eceff3;border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:14px;color:#4a5866}
+.lock{font-size:11px;padding:1px 6px;border-radius:6px;background:#f1e8ff;color:#7044c2;margin-left:4px}
+.bookitem{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px}
+.bookitem.on{border-color:var(--pri);background:var(--pri-soft)}
+.bookitem .n{flex:1}
+.bookitem small{display:block;color:var(--sub)}
+.gwrow{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+.gwrow input{border:1px solid var(--line);border-radius:8px;padding:8px}
+.toggle{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);font-size:15px}
+.toggle input{width:22px;height:22px}
+.grpcard{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px;cursor:pointer}
+.grpcard .gh{display:flex;justify-content:space-between;align-items:center}
+.grpcard small{color:var(--sub)}
+.transfer.ret{background:var(--warn-soft)} .transfer.claim{background:#efeaf9}
+</style>
+</head>
+<body>
+<header>
+  <h1>💙 爸媽照護帳本</h1>
+  <span id="whoName" style="font-size:14px;color:var(--sub)"></span>
+  <span id="whoAvatar"></span>
+</header>
+
+<main id="main">
+  <div class="center"><div class="spinner"></div><p class="hint">載入中…</p></div>
+</main>
+
+<nav id="nav" class="hidden">
+  <button data-tab="list" class="on"><span class="i">📋</span>明細</button>
+  <button data-tab="settle"><span class="i">⚖️</span>結算</button>
+  <button class="add" id="addBtn" aria-label="記一筆">＋</button>
+  <button data-tab="fund"><span class="i">🏦</span>專戶</button>
+  <button data-tab="members"><span class="i">👨‍👩‍👧</span>成員</button>
+</nav>
+
+<div id="modal"></div>
+<div id="toast" class="toast hidden"></div>
+
+<script>
+/* ═══════════ 設定：部署後填入這兩個值 ═══════════ */
+const CONFIG = {
+  LIFF_ID: '2012321718-by9bc1DH',   // 例：2001234567-AbCdEfGh
+  GAS_URL: 'https://script.google.com/macros/s/AKfycbwYFs_OaAMhQbKPJVgAtj4Ae44sJ1nHSpi4uFtPj2s_WQu4wSu2iIaTCjYPEd_htgZt/exec'    // 例：https://script.google.com/macros/s/XXXX/exec
+};
+/* 兩個值都留空 → 「預覽模式」，資料只存在這個頁面裡，可先試用 */
+
+/* ═══════ 結算核心（前後端共用同一份邏輯） ═══════ */
+var SETTLE_MODES = {
+  equal:     { name: '各家均分',               desc: '每個參與分攤的家庭平均負擔，不動用專戶。' },
+  ratio:     { name: '依比例分攤',             desc: '依各家設定的比例負擔（例如 1:1），不動用專戶。' },
+  fund:      { name: '專戶全額支付',           desc: '家人墊付的款項全部由專戶撥還。專戶不夠時無法結算，需先存入。' },
+  fundFirst: { name: '專戶優先，不足依比例分攤', desc: '先用專戶撥還，專戶不夠的部分再依各家比例分攤。' },
+  fundCap:   { name: '專戶每期上限',           desc: '專戶每期最多負擔設定金額（含專戶直接付款），超過的部分依各家比例分攤。' },
+  estate:    { name: '不足列為遺產清償',       desc: '先用專戶撥還，不夠的部分列為「待遺產分割時清償」，家人先不分攤。' }
+};
+var FUND_SOURCES = ['農保喪葬津貼', '遺產分配', '家人出資', '媽媽收入', '政府補助', '上一本結餘',
+  '銀行存款', '股票', '基金', '不動產', '保險理賠', '其他'];
+var FUND_ID = 'FUND';     // 由本帳專戶直接付款
+var ESTATE_ID = 'ESTATE'; // 由爸爸帳戶（遺產）直接付款，不經專戶
+
+/** 專戶餘額。「領取」是家人直接從爸爸帳戶拿的錢，不經過專戶，所以不影響餘額 */
+function computeFundSummary(fundEntries, records) {
+  var s = { deposits: 0, returned: 0, payouts: 0, transferredOut: 0, direct: 0, received: 0, balance: 0, bySource: {} };
+  fundEntries.forEach(function (f) {
+    var a = Number(f.amount) || 0;
+    if (f.type === '存入') { s.deposits += a; s.bySource[f.source || '其他'] = (s.bySource[f.source || '其他'] || 0) + a; }
+    else if (f.type === '退回') s.returned += a;
+    else if (f.type === '撥付') s.payouts += a;
+    else if (f.type === '轉出') s.transferredOut += a;
+    else if (f.type === '領取') s.received += a;
+  });
+  records.forEach(function (r) { if (r.payerId === FUND_ID) s.direct += Number(r.amount) || 0; });
+  s.balance = s.deposits + s.returned - s.payouts - s.transferredOut - s.direct;
+  return s;
+}
+
+function groupOf_(m) { return (m && String(m.group || '').trim()) || (m ? m.name : '?'); }
+
+/**
+ * inp: { records:[{id,amount,payerId}], receipts:[{id,memberId,amount}], members:[{userId,name,group}],
+ *        groupWeights:{家庭:比例}, mode, cap, fundAvailable }
+ */
+function computeSettlement(inp) {
+  var mode = SETTLE_MODES[inp.mode] ? inp.mode : 'equal';
+  var mem = {}, warnings = [];
+  inp.members.forEach(function (m) { mem[m.userId] = m; });
+  var paid = {}, recv = {}, fundDirect = 0, estateDirect = 0, P = 0;
+  var included = [], unknown = [], receiptIds = [];
+  inp.records.forEach(function (r) {
+    var a = Number(r.amount) || 0;
+    if (r.payerId === FUND_ID) { fundDirect += a; included.push(r.id); }
+    else if (r.payerId === ESTATE_ID) { estateDirect += a; included.push(r.id); }
+    else if (r.payerId && mem[r.payerId]) { paid[r.payerId] = (paid[r.payerId] || 0) + a; P += a; included.push(r.id); }
+    else unknown.push(r.id);
+  });
+  (inp.receipts || []).forEach(function (f) {
+    if (mem[f.memberId]) { recv[f.memberId] = (recv[f.memberId] || 0) + (Number(f.amount) || 0); receiptIds.push(f.id); }
+  });
+
+  // 每位成員：墊付 − 已領取。領取多於墊付的部分要退回專戶
+  var ids = {};
+  Object.keys(paid).forEach(function (k) { ids[k] = 1; });
+  Object.keys(recv).forEach(function (k) { ids[k] = 1; });
+  var people = Object.keys(ids).map(function (id) {
+    var p = paid[id] || 0, r = recv[id] || 0;
+    return { id: id, name: mem[id].name, group: groupOf_(mem[id]), paid: p, recv: r,
+      adv: Math.max(0, p - r), hold: Math.max(0, r - p), reimbF: 0, reimb: 0 };
+  });
+  var returns = people.filter(function (x) { return Math.round(x.hold) > 0; })
+    .map(function (x) { return { id: x.id, name: x.name, amount: Math.round(x.hold) }; });
+  var H = returns.reduce(function (s, x) { return s + x.amount; }, 0);
+  var A = people.reduce(function (s, x) { return s + x.adv; }, 0);
+
+  var avail = Math.max(0, Number(inp.fundAvailable) || 0) + H;
+  if ((Number(inp.fundAvailable) || 0) < 0) warnings.push('專戶餘額是負數，請先登記存入');
+  var capacity = 0;
+  if (mode === 'fund' || mode === 'fundFirst' || mode === 'estate') capacity = avail;
+  else if (mode === 'fundCap') capacity = Math.max(0, Math.min(avail, (Number(inp.cap) || 0) - fundDirect));
+  var R = Math.min(capacity, A);
+  var shortfall = mode === 'fund' ? Math.max(0, A - R) : 0;
+  if (shortfall > 0.5) warnings.push('專戶不足 ' + Math.round(shortfall) + ' 元，需先存入才能結算（或改用「專戶優先，不足依比例分攤」）');
+  var S = (mode === 'fund' || mode === 'estate') ? 0 : A - R;
+
+  // 家庭（分攤單位）
+  var gw = inp.groupWeights || {}, groups = {};
+  inp.members.forEach(function (m) {
+    var g = groupOf_(m);
+    if (!groups[g]) groups[g] = { group: g, members: [], w: 0, adv: 0, paid: 0, recv: 0, share: 0, reimb: 0, net: 0 };
+    if (groups[g].members.indexOf(m.name) < 0) groups[g].members.push(m.name);
+  });
+  Object.keys(groups).forEach(function (g) {
+    var w = Number(gw[g]) || 0;
+    groups[g].w = mode === 'equal' ? (w > 0 ? 1 : 0) : w;
+  });
+  var W = Object.keys(groups).reduce(function (s, g) { return s + groups[g].w; }, 0);
+  if (S > 0.5 && W === 0) warnings.push('沒有設定參與分攤的家庭比例，請到「成員」頁設定');
+  people.forEach(function (x) { var g = groups[x.group]; g.adv += x.adv; g.paid += x.paid; g.recv += x.recv; });
+  Object.keys(groups).forEach(function (k) { var g = groups[k]; g.share = W > 0 ? S * g.w / W : 0; });
+
+  // 專戶撥還：優先給「多付」的家庭，家庭內再依各人墊付比例分配
+  var pos = 0;
+  Object.keys(groups).forEach(function (k) { var g = groups[k]; g.excess = g.adv - g.share; if (g.excess > 0) pos += g.excess; });
+  if (R > 0 && pos > 0) {
+    people.forEach(function (x) {
+      var g = groups[x.group];
+      x.reimbF = (g.excess > 0 && g.adv > 0) ? R * (g.excess / pos) * (x.adv / g.adv) : 0;
+    });
+    var target = Math.round(R), acc = 0;
+    people.forEach(function (x) { x.reimb = Math.floor(x.reimbF); acc += x.reimb; });
+    var order = people.slice().sort(function (a, b) { return (b.reimbF - b.reimb) - (a.reimbF - a.reimb); });
+    for (var i = 0; acc < target && i < order.length; i++) { if (order[i].reimbF > 0) { order[i].reimb++; acc++; } }
+  }
+  people.forEach(function (x) { groups[x.group].reimb += x.reimb; });
+  var groupRows = Object.keys(groups).map(function (k) {
+    var g = groups[k]; g.net = g.adv - g.reimb - g.share;
+    return { group: g.group, members: g.members, weight: g.w, paid: g.paid, recv: g.recv, adv: g.adv,
+      reimb: g.reimb, share: g.share, net: g.net };
+  }).filter(function (g) { return g.paid || g.recv || g.weight; });
+
+  var transfers = [], estateClaims = [];
+  if (mode === 'estate') {
+    estateClaims = people.map(function (x) { return { id: x.id, name: x.name, amount: Math.round(x.adv - x.reimb) }; })
+      .filter(function (c) { return c.amount > 0; });
+  } else {
+    var cred = groupRows.filter(function (g) { return g.net > 0.5; }).map(function (g) { return { name: g.group, v: g.net }; });
+    var debt = groupRows.filter(function (g) { return g.net < -0.5; }).map(function (g) { return { name: g.group, v: -g.net }; });
+    cred.sort(function (a, b) { return b.v - a.v; }); debt.sort(function (a, b) { return b.v - a.v; });
+    var a = 0, b = 0;
+    while (a < debt.length && b < cred.length) {
+      var x = Math.min(debt[a].v, cred[b].v);
+      if (Math.round(x) > 0) transfers.push({ from: debt[a].name, to: cred[b].name, amount: Math.round(x) });
+      debt[a].v -= x; cred[b].v -= x;
+      if (debt[a].v < 0.5) a++;
+      if (cred[b].v < 0.5) b++;
+    }
+  }
+  if (unknown.length) warnings.push(unknown.length + ' 筆沒有填付款人，這次不會結算');
+  var reimburse = people.filter(function (x) { return x.reimb > 0; })
+    .map(function (x) { return { id: x.id, name: x.name, amount: x.reimb }; });
+  return {
+    mode: mode, modeName: SETTLE_MODES[mode].name,
+    total: fundDirect + estateDirect + P, fundDirect: fundDirect, estateDirect: estateDirect, memberPaid: P,
+    received: people.reduce(function (s, x) { return s + x.recv; }, 0),
+    fundReimburse: Math.round(R), fundTotal: fundDirect + Math.round(R), familyShare: Math.round(S),
+    estateClaimTotal: estateClaims.reduce(function (s, c) { return s + c.amount; }, 0),
+    people: people.map(function (x) { return { id: x.id, name: x.name, group: x.group, paid: x.paid, recv: x.recv, reimb: x.reimb }; }),
+    groupRows: groupRows, reimburse: reimburse, returns: returns, transfers: transfers, estateClaims: estateClaims,
+    includedIds: included, receiptIds: receiptIds, unknownIds: unknown,
+    blocked: shortfall > 0.5 || (S > 0.5 && W === 0), warnings: warnings
+  };
+}
+
+/** 出資平衡：各家實際出資（家人出資存入＋歷次結算分攤）與約定比例的差距 */
+function computeContribution(fundEntries, settlements, members, groupWeights) {
+  var byId = {}, c = {};
+  members.forEach(function (m) { byId[m.userId] = m; });
+  fundEntries.forEach(function (f) {
+    if (f.type === '存入' && f.source === '家人出資' && byId[f.memberId]) {
+      var g = groupOf_(byId[f.memberId]); c[g] = (c[g] || 0) + (Number(f.amount) || 0);
+    }
+  });
+  settlements.forEach(function (s) {
+    if (s.state !== '有效') return;
+    (s.groupRows || []).forEach(function (g) { if (g.share) c[g.group] = (c[g.group] || 0) + g.share; });
+  });
+  var gw = groupWeights || {}, W = 0;
+  Object.keys(gw).forEach(function (g) { W += Number(gw[g]) || 0; });
+  var total = Object.keys(c).reduce(function (s, g) { return s + c[g]; }, 0);
+  var rows = Object.keys(gw).filter(function (g) { return Number(gw[g]) > 0; }).map(function (g) {
+    var target = W ? total * gw[g] / W : 0;
+    return { group: g, weight: Number(gw[g]), contributed: c[g] || 0, target: target, diff: (c[g] || 0) - target };
+  });
+  return { total: total, rows: rows };
+}
+/* ═══════ 結算核心結束 ═══════ */
+
+
+const DEMO = !CONFIG.LIFF_ID || !CONFIG.GAS_URL;
+const S = { me:null, members:[], books:[], records:[], fund:[], settlements:[], recon:[], summary:{},
+  categories:[], beneficiaries:[], fundSources:FUND_SOURCES,
+  bookId: store('bookId') || '', tab:'list', listView:'list', month: ym(new Date()), mineOnly:false, cat:'',
+  cutoff: today(), preview:null };
+
+/* ═══════════ 工具 ═══════════ */
+function store(k,v){ try{ if(v===undefined) return localStorage.getItem('cl_'+k); localStorage.setItem('cl_'+k,v); }catch(e){ return null; } }
+function ym(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function today(){ const d=new Date(); return ym(d)+'-'+String(d.getDate()).padStart(2,'0'); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function money(n){ return '$'+Math.round(n).toLocaleString('zh-TW'); }
+function num(n){ return Math.round(Math.abs(n)).toLocaleString('zh-TW'); }
+function signed(n){ const r=Math.round(n); return (r>0?'+':r<0?'−':'')+num(r); }
+function $(sel,root=document){ return root.querySelector(sel); }
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.remove('hidden'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.add('hidden'),2800); }
+function isAdmin(){ return S.me && S.me.role==='admin'; }
+function canWrite(){ return S.me && S.me.role!=='viewer' && book() && book().state==='open'; }
+function activeMembers(){ return S.members.filter(m=>m.state==='active'); }
+function book(){ return S.books.find(b=>b.id===S.bookId) || S.books[0]; }
+function bs(){ return (book()||{}).settings || {}; }
+function fundShort(){ return (bs().fundName||'專戶').replace(/（.*）/,''); }
+function memberName(id){ if(id===FUND_ID) return fundShort(); if(id===ESTATE_ID) return '爸爸帳戶（遺產）'; if(!id) return '未填';
+  const m=S.members.find(x=>x.userId===id); return m?m.name:'（已離開）'; }
+function bookRecords(){ return S.records.filter(r=>r.bookId===(book()||{}).id); }
+function bookFund(){ return S.fund.filter(f=>f.bookId===(book()||{}).id); }
+function sumOf(){ return (S.summary[(book()||{}).id]||{}); }
+function groupsInUse(){ const g=new Set(); activeMembers().forEach(m=>{ if(m.group) g.add(m.group); }); Object.keys(bs().groupWeights||{}).forEach(k=>g.add(k)); return [...g]; }
+const WEEK='日一二三四五六';
+function dayLabel(d){ const dt=new Date(d+'T00:00:00'); return `${dt.getMonth()+1}/${dt.getDate()}（${WEEK[dt.getDay()]}）`; }
+function benTag(b){ return b==='媽媽'?'<span class="tag mom">媽媽</span>':b==='共同'?'<span class="tag both">爸媽共同</span>':'<span class="tag">爸爸</span>'; }
+function lockTag(x){ return x.hidden?'<span class="lock">🔒不公開</span>':''; }
+const ROLE_NAME={admin:'管理員',member:'成員',viewer:'唯讀'};
+
+/* ═══════════ API ═══════════ */
+async function api(action, payload={}){
+  if(DEMO) return demoApi(action, payload);
+  const token = liff.getAccessToken();
+  const res = await fetch(CONFIG.GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify(Object.assign({action, token}, payload)) });
+  const j = await res.json();
+  if(!j.ok){
+    if(j.code==='AUTH_EXPIRED' || j.code==='AUTH'){ liff.logout(); liff.login({redirectUri: location.href}); throw new Error('重新登入中…'); }
+    const e=new Error(j.message); e.code=j.code; throw e;
+  }
+  return j.data;
+}
+async function reload(){ Object.assign(S, await api('list')); S.preview=null; render(); }
+
+/* ═══════════ 啟動 ═══════════ */
+async function start(){
+  try{
+    if(!DEMO){
+      await liff.init({ liffId: CONFIG.LIFF_ID });
+      if(!liff.isLoggedIn()){ liff.login({redirectUri: location.href}); return; }
+    }
+    Object.assign(S, await api('me'));
+    renderWho();
+    if(S.me.state!=='active'){ renderPending(); if(!S.me.nameSet) askName(); return; }
+    if(!S.books.some(b=>b.id===S.bookId)) S.bookId = (S.books.find(b=>b.state==='open')||S.books[0]||{}).id;
+    $('#nav').classList.remove('hidden');
+    render();
+    if(!S.me.nameSet) askName();
+  }catch(e){
+    $('#main').innerHTML = `<div class="center"><div class="big">⚠️</div><p>${esc(e.message||e)}</p>
+      <button class="btn ghost" onclick="location.reload()">重新整理</button></div>`;
+  }
+}
+function askName(){
+  modal(`<h2>請先取一個名字</h2>
+    <p class="hint">家人在帳本上會看到這個名字，例如「士民」「大嫂」「偉翔」。之後可以在「成員」頁修改，改名後你建立的紀錄也會一起更新。</p>
+    <div class="field"><input id="nmIn" maxlength="20" value="${esc(S.me.name)}"></div>
+    <button class="btn" id="nmSave">確定</button>`, true);
+  $('#nmSave').onclick=async()=>{ const v=$('#nmIn').value.trim(); if(!v) return toast('請輸入名字');
+    try{ await api('rename',{name:v}); closeModal(); toast('你好，'+v); Object.assign(S, await api('me'));
+      renderWho(); if(S.me.state==='active') render(); else renderPending(); }catch(e){ toast(e.message); } };
+}
+function renderWho(){
+  const m = S.members.find(x=>x.userId===S.me.userId) || {};
+  $('#whoName').textContent = S.me.name + (S.me.role!=='member'?'（'+ROLE_NAME[S.me.role]+'）':'');
+  $('#whoAvatar').innerHTML = m.pictureUrl ? `<img class="avatar" src="${esc(m.pictureUrl)}" alt="">`
+    : `<span class="avatar">${esc((S.me.name||'?').slice(0,1))}</span>`;
+}
+function renderPending(){
+  $('#main').innerHTML = `${demoBar()}<div class="center"><div class="big">⏳</div>
+    <h2>已送出加入申請</h2><p class="hint">你的名字：<b>${esc(S.me.name)}</b>　<a href="#" id="pnRename">修改</a><br>
+    請通知管理員在「成員」頁核准你，核准後重新打開這個連結就能使用。</p>
+    <button class="btn ghost" onclick="location.reload()">我已被核准，重新整理</button></div>`;
+  $('#pnRename').onclick=e=>{ e.preventDefault(); askName(); };
+  bindDemoBar();
+}
+
+/* ═══════════ 畫面切換 ═══════════ */
+document.querySelectorAll('nav button[data-tab]').forEach(b=>b.onclick=()=>{ S.tab=b.dataset.tab; render(); window.scrollTo(0,0); });
+$('#addBtn').onclick=()=>{ if(!canWrite()) return toast(S.me.role==='viewer'?'唯讀成員只能查看':'這本帳已封存');
+  S.tab==='fund'?openFundForm('存入'):openForm(); };
+
+function render(){
+  document.querySelectorAll('nav button[data-tab]').forEach(b=>b.classList.toggle('on', b.dataset.tab===S.tab));
+  $('#addBtn').style.opacity = canWrite()?1:.35;
+  renderWho();
+  const f = {list:renderList, settle:renderSettle, fund:renderFund, members:renderMembers}[S.tab];
+  $('#main').innerHTML = demoBar() + (S.tab==='members'?'':bookBar()) + f();
+  bindDemoBar(); bindTab();
+  if(S.tab==='settle' && !S.preview) loadPreview();
+}
+function bookBar(){
+  const b=book(); if(!b) return '<div class="card">還沒有帳本</div>';
+  return `<div class="bookbar" data-act="books"><span style="font-size:20px">📒</span>
+    <div class="bn">${esc(b.name)}<br><small>${b.state==='closed'?'已封存（唯讀）':'使用中'}・${esc((SETTLE_MODES[bs().mode]||{}).name||'')}</small></div><span>切換 ▾</span></div>
+    ${b.state==='closed'?'<div class="closedbar">🗄 這本帳已封存，只能查看。</div>':''}`;
+}
+function monthRecords(){ return bookRecords().filter(r=> S.month==='all' || r.date.startsWith(S.month)); }
+function shiftMonth(n){
+  if(S.month==='all') S.month=ym(new Date());
+  const [y,m]=S.month.split('-').map(Number); S.month=ym(new Date(y,m-1+n,1)); render();
+}
+function monthBar(){
+  const label = S.month==='all' ? '全部期間' : S.month.replace('-','年')+'月';
+  return `<div class="monthbar"><button class="iconbtn" data-act="prev">‹</button>
+    <div class="m">${label}</div><button class="iconbtn" data-act="next">›</button>
+    <button class="iconbtn" data-act="all" style="width:auto;padding:0 10px;font-size:14px">${S.month==='all'?'本月':'全部'}</button></div>`;
+}
+
+/* ─── 帳本切換與設定 ─── */
+function openBooks(){
+  modal(`<h2>帳本<button data-close>✕</button></h2>
+    ${S.books.map(b=>`<div class="bookitem ${b.id===book().id?'on':''}" data-book="${esc(b.id)}"><span style="font-size:22px">${b.state==='closed'?'🗄':'📒'}</span>
+      <div class="n"><b>${esc(b.name)}</b><small>${b.state==='closed'?'已封存':'使用中'}・專戶餘額 ${money(((S.summary[b.id]||{}).fund||{}).balance||0)}</small></div></div>`).join('')}
+    ${isAdmin()?'<button class="btn ghost" id="bkSet" style="margin-top:6px">⚙️ 目前帳本設定</button>':''}`);
+  $('#modal').querySelectorAll('[data-book]').forEach(x=>x.onclick=()=>{ S.bookId=x.dataset.book; store('bookId',S.bookId); S.preview=null; closeModal(); render(); });
+  if($('#bkSet')) $('#bkSet').onclick=openBookSettings;
+}
+function openBookSettings(){
+  const b=book(), s=bs(), gw=Object.assign({}, s.groupWeights||{});
+  groupsInUse().forEach(g=>{ if(!(g in gw)) gw[g]=0; });
+  const others=S.books.filter(x=>x.id!==b.id && x.state==='open');
+  modal(`<h2>帳本設定<button data-close>✕</button></h2>
+    <div class="field"><label>帳本名稱</label><input id="bName" value="${esc(b.name)}" maxlength="30"></div>
+    <div class="field"><label>專戶名稱</label><input id="bFund" value="${esc(s.fundName||'')}" maxlength="40" placeholder="例：媽媽照護專戶（LINE Bank 友感帳戶）"></div>
+    <div class="field"><label>新紀錄預設照護對象</label><select id="bBen">${S.beneficiaries.map(x=>`<option ${x===s.defaultBeneficiary?'selected':''}>${esc(x)}</option>`).join('')}</select></div>
+    <div class="field"><label>各家分攤比例（0 表示不分攤）</label><div id="gwList">
+      ${Object.keys(gw).map(g=>`<div class="gwrow"><input class="gwName" value="${esc(g)}" style="flex:1"><input class="gwVal" type="number" step="0.5" min="0" value="${esc(gw[g])}" style="width:80px"></div>`).join('')}
+      <div class="gwrow"><input class="gwName" placeholder="新增家庭名稱" style="flex:1"><input class="gwVal" type="number" step="0.5" min="0" placeholder="比例" style="width:80px"></div></div>
+      <p class="hint">成員屬於哪一家，在「成員」→「管理」設定。</p></div>
+    <div class="toggle"><span>家人「領取」紀錄預設不公開</span><input type="checkbox" id="bHide" ${s.hideReceiveDefault?'checked':''}></div>
+    <p class="hint">不公開的紀錄只有管理員、登記的人和當事人看得到；結算總額仍會包含它們。每筆也可以在明細裡單獨切換。</p>
+    <button class="btn" id="bSave" style="margin-top:10px">儲存設定</button>
+    <div class="card" style="margin-top:16px;background:#f6f7f9">
+      <h3>封存帳本</h3>
+      ${b.state==='open'?`<p class="hint">所有紀錄都結算後才能封存。封存後只能查看。</p>
+        <div class="field"><label>專戶結餘轉入</label><select id="bTo"><option value="">不轉（保留在本帳）</option>
+          ${others.map(o=>`<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('')}</select></div>
+        <p class="hint">目前結餘 ${money((sumOf().fund||{}).balance||0)}</p>
+        <button class="btn danger" id="bClose">封存這本帳</button>`
+      :`<button class="btn ghost" id="bReopen">重新開啟</button><p class="hint">重新開啟不會取消先前的結餘轉帳。</p>`}
+    </div>`);
+  $('#bSave').onclick=async()=>{
+    const weights={}; $('#modal').querySelectorAll('#gwList .gwrow').forEach(r=>{ const n=r.querySelector('.gwName').value.trim(), v=r.querySelector('.gwVal').value;
+      if(n && v!=='') weights[n]=Number(v); });
+    try{ await api('bookSettings',{bookId:b.id, name:$('#bName').value, settings:{fundName:$('#bFund').value, defaultBeneficiary:$('#bBen').value,
+      groupWeights:weights, hideReceiveDefault:$('#bHide').checked}}); closeModal(); toast('已儲存'); await reload(); }catch(e){ toast(e.message); } };
+  if($('#bClose')) $('#bClose').onclick=async()=>{ const to=$('#bTo').value;
+    if(!confirm(`確定封存「${b.name}」？${to?'\n結餘會轉入「'+S.books.find(x=>x.id===to).name+'」。':''}`)) return;
+    try{ const r=await api('closeBook',{bookId:b.id, transferTo:to}); closeModal(); toast(r.transferred?`已封存，結餘 ${money(r.balance)} 已轉入`:'已封存');
+      if(to){ S.bookId=to; store('bookId',to); } await reload(); }catch(e){ toast(e.message); } };
+  if($('#bReopen')) $('#bReopen').onclick=async()=>{ try{ await api('reopenBook',{bookId:b.id}); closeModal(); toast('已重新開啟'); await reload(); }catch(e){ toast(e.message); } };
+}
+
+/* ─── 明細 ─── */
+function renderList(){
+  let html = `<div class="seg"><button data-view="list" class="${S.listView==='list'?'on':''}">清單</button>
+    <button data-view="stats" class="${S.listView==='stats'?'on':''}">統計</button></div>`;
+  if(S.listView==='stats') return html + renderStats();
+  let rs = monthRecords();
+  if(S.mineOnly) rs = rs.filter(r=>r.createdBy===S.me.userId);
+  if(S.cat) rs = rs.filter(r=>r.category===S.cat);
+  rs.sort((a,b)=> b.date.localeCompare(a.date) || String(b.createdAt).localeCompare(String(a.createdAt)));
+  const sum = rs.reduce((s,r)=>s+r.amount,0);
+  html += monthBar();
+  html += `<div class="chips">
+    <button class="chip ${!S.mineOnly?'on':''}" data-mine="0">全部人</button>
+    <button class="chip ${S.mineOnly?'on':''}" data-mine="1">只看我記的</button>
+    <span style="width:8px;flex:none"></span>
+    <button class="chip ${!S.cat?'on':''}" data-cat="">全部類別</button>
+    ${S.categories.map(c=>`<button class="chip ${S.cat===c?'on':''}" data-cat="${esc(c)}">${esc(c)}</button>`).join('')}
+  </div>`;
+  html += `<div class="total"><div><small>合計 ${rs.length} 筆</small></div><b>${money(sum)}</b></div>`;
+  if(!rs.length) return html + `<div class="empty">這段期間沒有紀錄${S.month!=='all'?'<br>可以按上方「全部」看全部期間':''}</div>`;
+  let last='';
+  for(const r of rs){
+    if(r.date!==last){
+      const daySum = rs.filter(x=>x.date===r.date).reduce((s,x)=>s+x.amount,0);
+      html += `<div class="dayhead"><span>${dayLabel(r.date)}</span><span>${money(daySum)}</span></div>`; last=r.date;
+    }
+    const mine = r.createdBy===S.me.userId;
+    html += `<div class="rec ${mine?'mine':''}" data-id="${esc(r.id)}">
+      <div class="body"><div class="t">${esc(r.item)}${r.hasReceipt?' 📎':''}${lockTag(r)}</div>
+        <div class="meta"><span class="tag">${esc(r.category)}</span>${benTag(r.beneficiary)}付款：${esc(memberName(r.payerId))}　記錄：${esc(r.createdByName)}</div>
+        ${r.note?`<div class="note">${esc(r.note)}</div>`:''}</div>
+      <div><div class="amt">${money(r.amount)}</div><div style="text-align:right"><span class="st st-${esc(r.status)}">${esc(r.status)}</span></div></div>
+    </div>`;
+  }
+  html += `<button class="btn ghost" data-act="csv" style="margin-top:14px">⬇︎ 匯出這份清單（CSV）</button>`;
+  return html;
+}
+function renderStats(){
+  const rs = monthRecords();
+  const total = rs.reduce((s,r)=>s+r.amount,0);
+  const group = key => { const o={}; rs.forEach(r=>{ const k=key(r); o[k]=(o[k]||0)+r.amount; }); return Object.entries(o).sort((a,b)=>b[1]-a[1]); };
+  const bars = (arr,color) => arr.length ? arr.map(([c,v])=>`<div class="catrow"><div class="l"><span>${esc(c)}</span>
+      <span>${money(v)}　<small style="color:var(--sub)">${total?Math.round(v/total*100):0}%</small></span></div>
+      <div class="bar" style="width:${Math.max(2,v/arr[0][1]*100)}%;${color?'background:'+color:''}"></div></div>`).join('') : '<p class="hint">沒有資料</p>';
+  return monthBar() + `<div class="total"><div><small>${rs.length} 筆支出</small></div><b>${money(total)}</b></div>
+    <div class="card"><h3>依類別</h3>${bars(group(r=>r.category))}</div>
+    <div class="card"><h3>依照護對象</h3>${bars(group(r=>r.beneficiary==='共同'?'爸媽共同':r.beneficiary),'#b0407a')}</div>
+    <div class="card"><h3>依付款人</h3>${bars(group(r=>memberName(r.payerId)),'#1e9e62')}</div>`;
+}
+
+/* ─── 結算 ─── */
+async function loadPreview(){
+  try{ S.preview = await api('preview',{bookId:book().id, cutoff:S.cutoff}); if(S.tab==='settle') render(); }
+  catch(e){ toast(e.message); }
+}
+function renderSettle(){
+  const mode = SETTLE_MODES[bs().mode] || SETTLE_MODES.equal;
+  let html = `<div class="card"><h3>結算方式${isAdmin()&&book().state==='open'?'<button class="mini" data-act="mode">變更</button>':''}</h3>
+    <b>${esc(mode.name)}</b>${bs().mode==='fundCap'?`（每期上限 ${money(bs().cap)}）`:''}
+    <p class="hint" style="margin-bottom:0">${esc(mode.desc)}</p>
+    <p class="hint" style="margin-bottom:0">各家比例：${Object.entries(bs().groupWeights||{}).filter(([g,w])=>w>0).map(([g,w])=>esc(g)+' '+w).join('：')||'未設定'}</p></div>`;
+  const c = S.preview;
+  if(!c) return html + `<div class="center" style="padding:30px"><div class="spinner"></div></div>`;
+  const usesFund = ['fund','fundFirst','fundCap','estate'].includes(c.mode);
+  html += `<div class="card"><h3>本期結算預覽</h3>
+    <div class="field"><label>結算到哪一天（含當天以前所有未結清的紀錄）</label><input type="date" id="cutoff" value="${esc(S.cutoff)}"></div>
+    <div class="kv"><span>支出合計</span><span><b>${money(c.total)}</b>（${c.includedIds.length} 筆）</span></div>
+    ${c.fundDirect?`<div class="kv"><span>${esc(fundShort())}直接付款</span><span>${money(c.fundDirect)}</span></div>`:''}
+    ${c.estateDirect?`<div class="kv"><span>爸爸帳戶直接付款</span><span>${money(c.estateDirect)}</span></div>`:''}
+    <div class="kv"><span>家人墊付</span><span>${money(c.memberPaid)}</span></div>
+    ${c.received?`<div class="kv"><span>家人已從爸爸帳戶領取</span><span>${money(c.received)}</span></div>`:''}
+    ${usesFund?`<div class="kv"><span>專戶撥還家人</span><span class="pos">${money(c.fundReimburse)}</span></div>
+      <div class="kv"><span>專戶目前餘額</span><span>${money((sumOf().fund||{}).balance||0)}</span></div>`:''}
+    ${c.mode==='estate'?`<div class="kv"><span>列為遺產清償</span><span>${money(c.estateClaimTotal)}</span></div>`
+      :`<div class="kv"><span>家人依比例分攤</span><span>${money(c.familyShare)}</span></div>`}</div>`;
+  if(c.warnings.length) html += `<div class="card warn">${c.warnings.map(w=>`<div>⚠️ ${esc(w)}</div>`).join('')}</div>`;
+  if(c.groupRows.length){
+    html += `<div class="card"><h3>各單位明細</h3><table><tr><th>單位</th><th>墊付</th>${c.received?'<th>已領</th>':''}${usesFund?'<th>撥還</th>':''}<th>應分攤</th><th>差額</th></tr>
+      ${c.groupRows.map(g=>`<tr><td>${esc(g.group)}<br><small style="color:var(--sub)">${esc(g.members.join('、'))}</small></td><td>${num(g.paid)}</td>
+        ${c.received?`<td>${num(g.recv)}</td>`:''}${usesFund?`<td>${num(g.reimb)}</td>`:''}<td>${num(g.share)}</td>
+        <td class="${g.net>=0.5?'pos':g.net<=-0.5?'neg':''}">${signed(g.net)}</td></tr>`).join('')}</table>
+      <p class="hint">差額為正：其他家要再還；為負：要補給其他家。${c.mode==='estate'?'遺產清償模式下，正的差額列為待遺產分割時清償。':''}</p></div>`;
+  }
+  html += `<div class="card"><h3>要轉的錢</h3>`;
+  html += c.returns.map(t=>`<div class="transfer ret"><span>${esc(t.name)} → 🏦 專戶（領取多於墊付，退回）</span><b>${money(t.amount)}</b></div>`).join('');
+  html += c.reimburse.map(t=>`<div class="transfer fundt"><span>🏦 專戶 → ${esc(t.name)}</span><b>${money(t.amount)}</b></div>`).join('');
+  html += c.transfers.map(t=>`<div class="transfer"><span>${esc(t.from)} → ${esc(t.to)}</span><b>${money(t.amount)}</b></div>`).join('');
+  html += c.estateClaims.map(t=>`<div class="transfer claim"><span>📜 待遺產分割時清償給 ${esc(t.name)}</span><b>${money(t.amount)}</b></div>`).join('');
+  if(!c.returns.length && !c.reimburse.length && !c.transfers.length && !c.estateClaims.length) html += '<p class="hint">不需要轉帳。</p>';
+  html += `</div>`;
+  if(isAdmin() && book().state==='open'){
+    const n=c.includedIds.length+c.receiptIds.length;
+    html += `<button class="btn green" data-act="settle" ${c.blocked||!n?'disabled':''}>完成本期結算</button>
+      <p class="hint" style="text-align:center">按下後：專戶自動記下撥付／退回，這 ${n} 筆標記已結清並鎖定。</p>`;
+  } else if(!isAdmin()) html += `<p class="hint" style="text-align:center">結算由管理員執行。</p>`;
+  const hs = S.settlements.filter(s=>s.bookId===book().id).reverse();
+  const lastValid = hs.find(s=>s.state==='有效');
+  html += `<div class="card" style="margin-top:12px"><h3>結算紀錄</h3>${hs.length? hs.map(s=>`<div class="hist">
+      <div class="h"><b>${esc(s.label)}</b><span>${money(s.total)}</span></div>
+      <small>${esc((SETTLE_MODES[s.mode]||{}).name||s.mode)}・截至 ${esc(s.cutoff)}・${s.recordCount} 筆・專戶負擔 ${money(s.fundTotal)}・家人分攤 ${money(s.familyShare)}${s.state!=='有效'?'・<b>已撤銷</b>':''}</small>
+      ${s.returns.map(t=>`<div><small>${esc(memberName(t.id))} → 專戶 ${money(t.amount)}</small></div>`).join('')}
+      ${s.reimburse.map(t=>`<div><small>🏦 專戶 → ${esc(memberName(t.id))} ${money(t.amount)}</small></div>`).join('')}
+      ${s.transfers.map(t=>`<div><small>${esc(t.from)} → ${esc(t.to)} ${money(t.amount)}</small></div>`).join('')}
+      ${s.estateClaims.map(t=>`<div><small>📜 待遺產清償：${esc(memberName(t.id))} ${money(t.amount)}</small></div>`).join('')}
+      ${isAdmin()&&book().state==='open'&&lastValid&&s.id===lastValid.id?`<button class="mini" data-undo="${esc(s.id)}" style="margin:6px 0 0">撤銷這次結算</button>`:''}
+    </div>`).join('') : '<p class="hint">還沒有結算過。</p>'}</div>`;
+  return html;
+}
+function openModeForm(){
+  let mode = bs().mode;
+  modal(`<h2>結算方式<button data-close>✕</button></h2>
+    ${Object.entries(SETTLE_MODES).map(([k,m])=>`<label class="mode ${k===mode?'on':''}" data-mode="${k}">
+      <input type="radio" name="mode" value="${k}" ${k===mode?'checked':''}><div><b>${esc(m.name)}</b><small>${esc(m.desc)}</small></div></label>`).join('')}
+    <div class="field" id="capField"><label>專戶每期最多負擔（元）</label><input id="sCap" type="number" inputmode="numeric" value="${esc(bs().cap||0)}"></div>
+    <div class="field"><label>專戶餘額低於多少時提醒（元，0 為不提醒）</label><input id="sLow" type="number" inputmode="numeric" value="${esc(bs().lowBalance||0)}"></div>
+    <p class="hint">各家比例在「📒 帳本」→「目前帳本設定」修改。</p>
+    <button class="btn" id="sSave">儲存</button>`);
+  const sync=()=>{ $('#capField').classList.toggle('hidden', mode!=='fundCap');
+    document.querySelectorAll('.mode').forEach(x=>x.classList.toggle('on', x.dataset.mode===mode)); };
+  document.querySelectorAll('input[name=mode]').forEach(i=>i.onchange=()=>{ mode=i.value; sync(); });
+  sync();
+  $('#sSave').onclick=async()=>{ try{ await api('bookSettings',{bookId:book().id, settings:{mode, cap:Number($('#sCap').value), lowBalance:Number($('#sLow').value)}});
+    closeModal(); toast('已更新結算方式'); await reload(); }catch(e){ toast(e.message); } };
+}
+
+/* ─── 專戶 ─── */
+function renderFund(){
+  const f = sumOf().fund || {balance:0,deposits:0,returned:0,payouts:0,direct:0,transferredOut:0,bySource:{}};
+  const recs=bookRecords(), now=new Date(), lm=[];
+  for(let k=1;k<=3;k++){ const m=ym(new Date(now.getFullYear(), now.getMonth()-k, 1)); lm.push(recs.filter(r=>r.date.startsWith(m)).reduce((s,r)=>s+r.amount,0)); }
+  const avg = lm.reduce((a,b)=>a+b,0)/3;
+  const low = bs().lowBalance && f.balance < bs().lowBalance && book().state==='open';
+  let html = `<div class="card fund"><div class="sub">${esc(bs().fundName||'專戶')}　帳本餘額</div><div class="bal">${money(f.balance)}</div>
+    <div class="grid"><div>累計存入<b>${money(f.deposits+f.returned)}</b></div><div>撥還家人<b>${money(f.payouts)}</b></div><div>直接付款<b>${money(f.direct)}</b></div></div>
+    ${f.transferredOut?`<div class="sub" style="margin-top:6px">已轉出到其他帳本 ${money(f.transferredOut)}</div>`:''}
+    ${avg>0?`<div class="sub" style="margin-top:8px">近 3 個月平均每月支出 ${money(avg)}，餘額約可支應 ${(Math.max(0,f.balance)/avg).toFixed(1)} 個月</div>`:''}</div>`;
+  if(low) html += `<div class="card warn">⚠️ 專戶餘額低於提醒水位 ${money(bs().lowBalance)}，請依約定比例補充資金（見下方「出資平衡」）。</div>`;
+  if(canWrite()) html += `<div class="row2" style="margin-bottom:12px"><button class="btn" data-act="fundAdd">＋ 登記存入</button>
+    <button class="btn ghost" data-act="recvAdd">登記領取</button></div>
+    <p class="hint" style="margin-top:-6px">「領取」：家人直接從爸爸帳戶拿出來的錢（例如賣股票款）。結算時會和他墊付的金額相抵。</p>`;
+  const ct = sumOf().contribution;
+  if(ct && ct.rows.length && ct.total>0){
+    html += `<div class="card"><h3>出資平衡（約定 ${ct.rows.map(r=>esc(r.group)+' '+r.weight).join('：')}）</h3>
+      <table><tr><th>家庭</th><th>已出資</th><th>應出資</th><th>差額</th></tr>
+      ${ct.rows.map(r=>`<tr><td>${esc(r.group)}</td><td>${num(r.contributed)}</td><td>${num(r.target)}</td><td class="${r.diff>=0.5?'pos':r.diff<=-0.5?'neg':''}">${signed(r.diff)}</td></tr>`).join('')}</table>
+      <p class="hint">已出資＝「家人出資」存入＋歷次結算的分攤。下次補錢時，差額為負的家庭可以多存一些來拉平。</p></div>`;
+  }
+  const src = Object.entries(f.bySource).sort((a,b)=>b[1]-a[1]);
+  html += `<div class="card"><h3>資金來源</h3>${src.length? src.map(([k,v])=>`<div class="catrow"><div class="l"><span>${esc(k)}</span>
+     <span>${money(v)}　<small style="color:var(--sub)">${Math.round(v/f.deposits*100)}%</small></span></div>
+     <div class="bar" style="width:${Math.max(2,v/src[0][1]*100)}%;background:var(--ok)"></div></div>`).join('') : '<p class="hint">還沒有存入紀錄。每筆存入都要登記資金來源。</p>'}</div>`;
+  const rc = S.recon.filter(r=>r.bookId===book().id).sort((a,b)=>b.date.localeCompare(a.date));
+  html += `<div class="card"><h3>銀行對帳${isAdmin()?'<button class="mini" data-act="recon">輸入銀行餘額</button>':''}</h3>
+    ${rc.length? rc.slice(0,6).map(r=>`<div class="kv"><span>${esc(r.date)}</span><span>銀行 ${money(r.bankBalance)}／帳本 ${money(r.ledgerBalance)}
+      ${Math.abs(r.diff)<1?'<span class="pos">✓ 相符</span>':`<span class="neg">差 ${signed(r.diff)}</span>`}</span></div>`).join('')
+      :'<p class="hint">每月一次，把銀行 App 看到的實際餘額輸入進來，帳本會自動比對。</p>'}</div>`;
+  const items = [...bookFund().map(x=>({kind:x.type, date:x.date, x})),
+    ...recs.filter(r=>r.payerId===FUND_ID).map(r=>({kind:'直接付款', date:r.date, r}))].sort((a,b)=>b.date.localeCompare(a.date));
+  html += `<div class="card"><h3>專戶明細</h3>${items.length?'':'<p class="hint">沒有資料</p>'}`;
+  const row=(attrs,mine,title,meta,amt,cls)=>`<div class="rec ${mine?'mine':''}" ${attrs} style="padding:10px 4px;margin:0;border-radius:0;border-bottom:1px solid var(--line)">
+    <div class="body"><div class="t">${title}</div><div class="meta">${meta}</div></div><div class="amt ${cls}">${amt}</div></div>`;
+  for(const it of items){
+    const x=it.x;
+    if(it.kind==='存入') html += row(`data-fund="${esc(x.id)}"`, x.createdBy===S.me.userId, `<span class="tag src">${esc(x.source)}</span>${esc(x.sourceDetail||'存入')}${lockTag(x)}`,
+      `${esc(x.date)}　${x.memberId?'出資：'+esc(memberName(x.memberId))+'　':''}${x.account?'帳戶 '+esc(x.account)+'　':''}登記：${esc(x.createdByName)}`, '+'+num(x.amount), 'in');
+    else if(it.kind==='領取') html += row(`data-fund="${esc(x.id)}"`, x.createdBy===S.me.userId, `<span class="tag" style="background:var(--warn-soft);color:var(--warn)">領取</span>${esc(memberName(x.memberId))} 從爸爸帳戶領取${lockTag(x)}`,
+      `${esc(x.date)}　${esc(x.note||'')}${x.settlementId?'　・已結算':''}`, num(x.amount), '');
+    else if(it.kind==='撥付') html += row('', false, `撥還 ${esc(memberName(x.memberId))}`, `${esc(x.date)}　${esc(x.note)}`, '−'+num(x.amount), 'out');
+    else if(it.kind==='退回') html += row('', false, `${esc(memberName(x.memberId))} 退回專戶`, `${esc(x.date)}　${esc(x.note)}`, '+'+num(x.amount), 'in');
+    else if(it.kind==='轉出') html += row('', false, '結餘轉出', `${esc(x.date)}　${esc(x.note)}`, '−'+num(x.amount), 'out');
+    else { const r=it.r; html += row(`data-id="${esc(r.id)}"`, false, esc(r.item)+lockTag(r), `${esc(r.date)}　專戶直接付款・${esc(r.category)}`, '−'+num(r.amount), 'out'); }
+  }
+  html += `</div><p class="hint">・存入：每筆都要登記資金來源；「家人出資」會記在出資人那一家。<br>・撥付、退回、結餘轉出由系統自動產生，不能手動修改。<br>・帳戶只填末 4 碼。</p>`;
+  return html;
+}
+function openRecon(){
+  modal(`<h2>銀行對帳<button data-close>✕</button></h2>
+    <p class="hint">打開銀行 App，把「${esc(bs().fundName||'專戶')}」目前的實際餘額輸入進來。</p>
+    <div class="field"><label>日期</label><input id="rcDate" type="date" value="${today()}"></div>
+    <div class="field"><label>銀行實際餘額</label><input id="rcBal" class="amount-input" type="number" inputmode="numeric"></div>
+    <div class="field"><label>備註（選填）</label><input id="rcNote" maxlength="200"></div>
+    <p class="hint">帳本目前餘額：${money((sumOf().fund||{}).balance||0)}</p>
+    <button class="btn" id="rcSave">比對</button>`);
+  $('#rcSave').onclick=async()=>{ const v=$('#rcBal').value; if(v==='') return toast('請輸入餘額');
+    try{ const r=await api('recon',{bookId:book().id, date:$('#rcDate').value, bankBalance:Number(v), note:$('#rcNote').value});
+      closeModal(); toast(Math.abs(r.diff)<1?'✓ 銀行餘額與帳本相符':`差 ${signed(r.diff)} 元，請檢查漏記的紀錄`); await reload(); }catch(e){ toast(e.message); } };
+}
+function openFundForm(type, x){
+  const isRecv = type==='領取';
+  const e = x || { date:today(), amount:'', source:'', sourceDetail:'', account:'', note:'', memberId:S.me.userId };
+  let source = e.source;
+  const members = activeMembers().filter(m=>m.role!=='viewer');
+  modal(`<h2>${x?'修改':''}${isRecv?'登記從爸爸帳戶領取':'登記存入專戶'}<button data-close>✕</button></h2>
+    <div class="field"><label>金額</label><input id="gAmt" class="amount-input" type="number" inputmode="numeric" min="1" placeholder="0" value="${esc(e.amount)}"></div>
+    ${isRecv?`<div class="field"><label>誰領取</label><select id="gMem" ${isAdmin()?'':'disabled'}>${members.map(m=>`<option value="${esc(m.userId)}" ${m.userId===e.memberId?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div>
+      <div class="field"><label>說明</label><input id="gNote" maxlength="300" placeholder="例：賣股票款，用來支付禮儀公司" value="${esc(e.note)}"></div>`
+    :`<div class="field"><label>資金來源（必填）</label><div class="catgrid">${S.fundSources.filter(s=>s!=='上一本結餘').map(s=>`<button type="button" data-s="${esc(s)}" class="${s===source?'on':''}">${esc(s)}</button>`).join('')}</div></div>
+      <div class="field ${source==='家人出資'?'':'hidden'}" id="gMemF"><label>出資人</label><select id="gMem">${members.map(m=>`<option value="${esc(m.userId)}" ${m.userId===(e.memberId||S.me.userId)?'selected':''}>${esc(m.name)}${m.group?'（'+esc(m.group)+'）':''}</option>`).join('')}</select></div>
+      <div class="field"><label>來源說明</label><input id="gDetail" maxlength="100" placeholder="例：農保喪葬津貼、遺囑指定照護金、姪兒出資" value="${esc(e.sourceDetail)}"></div>
+      <div class="field"><label>匯出帳戶（末 4 碼）</label><input id="gAcct" maxlength="40" placeholder="例：郵局 1234" value="${esc(e.account)}"></div>
+      <div class="field"><label>備註（選填）</label><input id="gNote" maxlength="300" value="${esc(e.note)}"></div>`}
+    <div class="field"><label>日期</label><input id="gDate" type="date" value="${esc(e.date)}"></div>
+    <button class="btn" id="gSave">${x?'儲存修改':'登記'}</button>
+    ${x?'<button class="btn danger" id="gDel" style="margin-top:8px">刪除</button>':''}`);
+  $('#modal').querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{ source=b.dataset.s;
+    $('#modal').querySelectorAll('[data-s]').forEach(y=>y.classList.toggle('on', y===b));
+    $('#gMemF').classList.toggle('hidden', source!=='家人出資'); });
+  $('#gSave').onclick=async()=>{
+    const entry={ amount:Number($('#gAmt').value), date:$('#gDate').value, note:$('#gNote').value.trim() };
+    if(!(entry.amount>0)) return toast('請輸入金額');
+    if(isRecv){ entry.memberId=$('#gMem').value; }
+    else { if(!source) return toast('請選擇資金來源'); entry.source=source; entry.sourceDetail=$('#gDetail').value.trim(); entry.account=$('#gAcct').value.trim();
+      if(source==='家人出資') entry.memberId=$('#gMem').value;
+      if(/\d{7,}/.test(entry.account.replace(/[\s-]/g,''))) return toast('帳號請只填末 4 碼'); }
+    try{ if(x) await api('fundUpdate',{id:x.id, entry}); else await api('fundAdd',{bookId:book().id, type:isRecv?'領取':'存入', entry});
+      closeModal(); toast(x?'已修改':'已登記 '+money(entry.amount)); S.tab='fund'; await reload(); }catch(err){ toast(err.message); }
+  };
+  if($('#gDel')) $('#gDel').onclick=async()=>{ if(!confirm('確定刪除這筆紀錄？')) return;
+    try{ await api('fundRemove',{id:x.id}); closeModal(); toast('已刪除'); await reload(); }catch(err){ toast(err.message); } };
+}
+function openFundDetail(id){
+  const x = S.fund.find(f=>f.id===id); if(!x) return;
+  if(x.createdBy===S.me.userId && canWrite() && !x.settlementId && x.source!=='上一本結餘') return openFundForm(x.type, x);
+  modal(`<h2>${x.type==='領取'?'領取紀錄':'存入紀錄'}<button data-close>✕</button></h2>
+    <div class="kv"><span>金額</span><span><b>${money(x.amount)}</b></span></div>
+    ${x.source?`<div class="kv"><span>資金來源</span><span>${esc(x.source)}</span></div>`:''}
+    ${x.memberId?`<div class="kv"><span>${x.type==='領取'?'領取人':'出資人'}</span><span>${esc(memberName(x.memberId))}</span></div>`:''}
+    ${x.sourceDetail?`<div class="kv"><span>說明</span><span>${esc(x.sourceDetail)}</span></div>`:''}
+    <div class="kv"><span>日期</span><span>${esc(x.date)}</span></div>
+    ${x.account?`<div class="kv"><span>匯出帳戶</span><span>${esc(x.account)}</span></div>`:''}
+    ${x.note?`<div class="kv"><span>備註</span><span>${esc(x.note)}</span></div>`:''}
+    <div class="kv"><span>登記者</span><span>${esc(x.createdByName)}</span></div>
+    ${hiddenToggle('fund',x)}
+    <p class="hint">${x.settlementId?'這筆已納入結算並鎖定。':'只有登記者本人可以修改或刪除。'}</p>`);
+  bindHiddenToggle();
+}
+function hiddenToggle(kind,x){ return isAdmin()?`<div class="toggle"><span>🔒 不公開給其他成員</span><input type="checkbox" id="hidTog" data-kind="${kind}" data-id="${esc(x.id)}" ${x.hidden?'checked':''}></div>`:''; }
+function bindHiddenToggle(){ const t=$('#hidTog'); if(t) t.onchange=async()=>{ try{ await api('setHidden',{kind:t.dataset.kind,id:t.dataset.id,hidden:t.checked}); toast(t.checked?'已設為不公開':'已公開'); await reload(); }catch(e){ toast(e.message); } }; }
+
+/* ─── 成員 ─── */
+/* ─── 合併計算（家庭） ─── */
+function groupList(){
+  const names=[...new Set(S.members.filter(m=>m.group && m.state!=='removed').map(m=>m.group))];
+  S.books.forEach(b=>Object.keys((b.settings||{}).groupWeights||{}).forEach(g=>{ if(!names.includes(g)) names.push(g); }));
+  return names.map(g=>({ name:g, members:S.members.filter(m=>m.group===g && m.state!=='removed'),
+    weights:S.books.map(b=>({ book:b, w:((b.settings||{}).groupWeights||{})[g] })) }));
+}
+function renderGroups(){
+  const gs=groupList(), solo=activeMembers().filter(m=>!m.group);
+  let html=`<div class="card"><h3>合併計算${isAdmin()?'<button class="mini pri" data-grp="">＋ 新增</button>':''}</h3>
+    <p class="hint" style="margin-top:0">把幾位成員合成一個單位一起算，例如大嫂、偉翔、靖哲合成「大哥家」。結算時以這個單位計算墊付、撥還和分攤，同一單位的人之間不用互相轉帳。</p>`;
+  if(!gs.length) html+='<p class="hint">還沒有合併計算的單位。</p>';
+  for(const g of gs){
+    const paid=S.records.filter(r=>g.members.some(m=>m.userId===r.payerId)).reduce((a,r)=>a+r.amount,0);
+    html+=`<div class="grpcard" ${isAdmin()?`data-grp="${esc(g.name)}"`:''}>
+      <div class="gh"><b>👪 ${esc(g.name)}</b>${isAdmin()?'<span class="hint" style="margin:0">編輯 ›</span>':''}</div>
+      <div class="chips" style="margin:6px 0 4px;flex-wrap:wrap">${g.members.length?g.members.map(m=>`<span class="chip on" style="cursor:default">${esc(m.name)}${m.state==='pending'?'（待核准）':''}</span>`).join(''):'<span class="hint">沒有成員</span>'}</div>
+      <small>${g.weights.map(x=>`${esc(x.book.name)}：比例 ${x.w===undefined?'未設定':x.w}`).join('　・　')}</small>
+      <small style="display:block">累計墊付 ${money(paid)}</small></div>`;
+  }
+  if(solo.length) html+=`<p class="hint">未合併、單獨計算（比例 0，不參與分攤）：${solo.map(m=>esc(m.name)).join('、')}</p>`;
+  return html+'</div>';
+}
+function openGroupForm(name){
+  const g = groupList().find(x=>x.name===name);
+  const sel = new Set(g?g.members.map(m=>m.userId):[]);
+  const cands = S.members.filter(m=>m.state!=='removed');
+  modal(`<h2>${g?'編輯合併計算':'新增合併計算'}<button data-close>✕</button></h2>
+    <div class="field"><label>名稱</label><input id="gpName" maxlength="20" value="${esc(name||'')}" placeholder="例：大哥家、士民家、妹妹家"></div>
+    <div class="field"><label>勾選要合併計算的人</label>
+      ${cands.map(m=>`<label class="toggle" style="cursor:pointer"><span>${esc(m.name)}${m.role==='viewer'?'（唯讀）':''}${m.state==='pending'?'（待核准）':''}
+        ${m.group&&m.group!==name?`<small style="color:var(--warn)">　目前在「${esc(m.group)}」，勾選後會移過來</small>`:''}</span>
+        <input type="checkbox" class="gpMem" value="${esc(m.userId)}" ${sel.has(m.userId)?'checked':''}></label>`).join('')}</div>
+    <div class="field"><label>分攤比例（各帳本分開設定，0 表示不分攤）</label>
+      ${S.books.map(b=>`<div class="gwrow"><span style="flex:1">${esc(b.name)}${b.state==='closed'?'（已封存）':''}</span>
+        <input class="gpW" data-book="${esc(b.id)}" type="number" step="0.5" min="0" value="${esc((((b.settings||{}).groupWeights||{})[name])??1)}" style="width:80px"></div>`).join('')}</div>
+    <div id="gpPreview" class="hint"></div>
+    <button class="btn" id="gpSave">儲存</button>
+    ${g?'<button class="btn danger" id="gpDel" style="margin-top:8px">解除合併</button><p class="hint">解除後，這些人改回單獨計算；以前的結算紀錄不受影響。</p>':''}`);
+  const upd=()=>{ const n=[...document.querySelectorAll('.gpMem:checked')].map(i=>S.members.find(m=>m.userId===i.value).name);
+    $('#gpPreview').textContent = n.length ? `結算時「${$('#gpName').value||'這個單位'}」＝ ${n.join(' ＋ ')}` : ''; };
+  document.querySelectorAll('.gpMem').forEach(i=>i.onchange=upd); $('#gpName').oninput=upd; upd();
+  $('#gpSave').onclick=async()=>{
+    const nm=$('#gpName').value.trim(); if(!nm) return toast('請輸入名稱');
+    const userIds=[...document.querySelectorAll('.gpMem:checked')].map(i=>i.value); if(!userIds.length) return toast('請至少勾選一位');
+    const weights={}; document.querySelectorAll('.gpW').forEach(i=>{ if(i.value!=='') weights[i.dataset.book]=Number(i.value); });
+    try{ await api('groupSave',{oldName:name||'', name:nm, userIds, weights}); closeModal(); toast(`已儲存「${nm}」`); await reload(); }catch(e){ toast(e.message); } };
+  if($('#gpDel')) $('#gpDel').onclick=async()=>{ if(!confirm(`確定解除「${name}」的合併計算？`)) return;
+    try{ await api('groupDelete',{name}); closeModal(); toast('已解除'); await reload(); }catch(e){ toast(e.message); } };
+}
+
+function renderMembers(){
+  const link = CONFIG.LIFF_ID ? 'https://liff.line.me/'+CONFIG.LIFF_ID : '（設定 LIFF_ID 後產生）';
+  let html = `<div class="card"><h3>邀請家人加入</h3>
+    <p class="hint">把連結貼到家族 LINE 群組，家人點開用 LINE 登入、取好名字後，由管理員核准。</p>
+    <div class="field"><input readonly value="${esc(link)}" id="inviteLink"></div>
+    <div class="row2"><button class="btn ghost" data-act="copy">複製連結</button>
+    ${!DEMO && liff.isApiAvailable && liff.isApiAvailable('shareTargetPicker')?'<button class="btn" data-act="share">分享到 LINE</button>':''}</div></div>`;
+  html += `<div class="card"><h3>我的名字</h3><div class="row2"><div class="field" style="margin:0">
+    <input id="myName" value="${esc(S.me.name)}" maxlength="20"></div><button class="btn ghost" style="flex:none;width:90px" data-act="rename">儲存</button></div>
+    <p class="hint">改名後，你之前建立的紀錄也會顯示新名字。</p></div>`;
+  html += renderGroups();
+  const order = {pending:0, active:1, removed:2};
+  const ms = [...S.members].sort((a,b)=>order[a.state]-order[b.state] || String(a.group).localeCompare(String(b.group)));
+  html += `<div class="card"><h3>成員（${activeMembers().length} 人）</h3>`;
+  for(const m of ms){
+    const self = m.userId===S.me.userId;
+    let acts='';
+    if(isAdmin()){
+      if(m.state==='pending') acts = `<button class="mini pri" data-mem="approve" data-uid="${esc(m.userId)}">核准</button>
+        <button class="mini" data-mem="approveViewer" data-uid="${esc(m.userId)}">唯讀</button>
+        <button class="mini" data-mem="remove" data-uid="${esc(m.userId)}">拒絕</button>`;
+      else if(m.state==='active') acts = `<button class="mini" data-mem="more" data-uid="${esc(m.userId)}">管理</button>`;
+      else acts = `<button class="mini" data-mem="approve" data-uid="${esc(m.userId)}">恢復</button>`;
+    }
+    html += `<div class="mem">${m.pictureUrl?`<img class="avatar" src="${esc(m.pictureUrl)}" alt="">`:`<span class="avatar">${esc(m.name.slice(0,1))}</span>`}
+      <div class="n">${esc(m.name)}${self?'（我）':''}${m.role!=='member'?`<span class="badge">${ROLE_NAME[m.role]}</span>`:''}
+        ${m.state==='pending'?'<span class="badge" style="background:var(--warn-soft);color:var(--warn)">待核准</span>':''}
+        ${m.state==='removed'?'<span class="badge">已移除</span>':''}
+        <small>LINE：${esc(m.lineName)}${m.group?'　・'+esc(m.group):'　・單獨計算'}</small></div>${acts}</div>`;
+  }
+  html += `</div><div class="card"><h3>使用規則</h3><p class="hint" style="margin:0">
+    ・每個人只能修改、刪除自己建立的資料，別人的只能看。<br>
+    ・唯讀成員（例如舅舅、阿姨）可以看帳，不能記帳。<br>
+    ・管理員負責核准成員、分家庭、設定比例與結算方式、執行結算、對帳、封存帳本，也可以把敏感紀錄設為不公開。<br>
+    ・結算後的紀錄會鎖定；需要更正時，管理員可撤銷最近一次結算。</p></div>`;
+  return html;
+}
+async function memberAct(op, uid){
+  const m = S.members.find(x=>x.userId===uid);
+  const run = async (o,v)=>{ try{ await api('member',{userId:uid, op:o, value:v}); toast('已更新'); await reload(); return true; }catch(e){ toast(e.message); } };
+  if(op==='more'){
+    const self = uid===S.me.userId;
+    modal(`<h2>${esc(m.name)}<button data-close>✕</button></h2>
+      <div class="field"><label>名字</label><div class="row2"><input id="mName" value="${esc(m.name)}" maxlength="20" style="flex:1;border:1px solid var(--line);border-radius:10px;padding:10px">
+        <button class="btn ghost" style="flex:none;width:80px" id="mRename">改名</button></div></div>
+      <div class="field"><label>合併計算單位（也可在「合併計算」卡片一次設定多人）</label><div class="row2"><input id="mGroup" list="grpList" value="${esc(m.group)}" placeholder="例：士民家、大哥家" style="flex:1;border:1px solid var(--line);border-radius:10px;padding:10px">
+        <datalist id="grpList">${groupsInUse().map(g=>`<option value="${esc(g)}">`).join('')}</datalist>
+        <button class="btn ghost" style="flex:none;width:80px" id="mGSave">儲存</button></div></div>
+      ${self?'':`<div class="field"><label>權限</label><select id="mRole">${['admin','member','viewer'].map(r=>`<option value="${r}" ${r===m.role?'selected':''}>${ROLE_NAME[r]}</option>`).join('')}</select></div>
+      <button class="btn danger" id="mRemove" style="margin-top:12px">移出帳本</button>
+      <p class="hint">移出後他就看不到帳本；他記過的帳會保留。</p>`}`);
+    $('#mRename').onclick=async()=>{ if(await run('rename',$('#mName').value)) closeModal(); };
+    $('#mGSave').onclick=async()=>{ if(await run('group',$('#mGroup').value)) closeModal(); };
+    if($('#mRole')) $('#mRole').onchange=e=>run('role', e.target.value);
+    if($('#mRemove')) $('#mRemove').onclick=async()=>{ if(confirm(`確定將 ${m.name} 移出帳本？`)){ await run('remove'); closeModal(); } };
+    return;
+  }
+  if(op==='remove' && !confirm(`確定拒絕 ${m.name} 的加入申請？`)) return;
+  if(op==='approveViewer') return run('approve','viewer');
+  await run(op);
+}
+
+/* ═══════════ 事件 ═══════════ */
+function bindTab(){
+  const m = $('#main');
+  m.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>act(b.dataset.act));
+  m.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{ S.listView=b.dataset.view; render(); });
+  m.querySelectorAll('[data-mine]').forEach(b=>b.onclick=()=>{ S.mineOnly=b.dataset.mine==='1'; render(); });
+  m.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{ S.cat=b.dataset.cat; render(); });
+  m.querySelectorAll('.rec[data-id]').forEach(b=>b.onclick=()=>openDetail(b.dataset.id));
+  m.querySelectorAll('[data-fund]').forEach(b=>b.onclick=()=>openFundDetail(b.dataset.fund));
+  m.querySelectorAll('[data-mem]').forEach(b=>b.onclick=()=>memberAct(b.dataset.mem, b.dataset.uid));
+  m.querySelectorAll('[data-undo]').forEach(b=>b.onclick=()=>undoSettle(b.dataset.undo));
+  m.querySelectorAll('[data-grp]').forEach(b=>b.onclick=()=>openGroupForm(b.dataset.grp));
+  const co=$('#cutoff'); if(co) co.onchange=()=>{ S.cutoff=co.value||today(); S.preview=null; render(); };
+}
+async function act(a){
+  if(a==='prev') return shiftMonth(-1);
+  if(a==='next') return shiftMonth(1);
+  if(a==='all'){ S.month = S.month==='all'? ym(new Date()) : 'all'; return render(); }
+  if(a==='books') return openBooks();
+  if(a==='csv') return exportCsv();
+  if(a==='mode') return openModeForm();
+  if(a==='fundAdd') return openFundForm('存入');
+  if(a==='recvAdd') return openFundForm('領取');
+  if(a==='recon') return openRecon();
+  if(a==='copy'){ const i=$('#inviteLink'); i.select(); try{ await navigator.clipboard.writeText(i.value); }catch(e){ document.execCommand('copy'); } return toast('已複製邀請連結'); }
+  if(a==='share'){ try{ await liff.shareTargetPicker([{type:'text', text:'💙 爸媽照護帳本\n點這個連結用 LINE 登入，就能一起查看與記錄照護費用：\nhttps://liff.line.me/'+CONFIG.LIFF_ID}]); }catch(e){ toast('分享取消'); } return; }
+  if(a==='rename'){ const v=$('#myName').value.trim(); if(!v) return toast('請輸入名字');
+    try{ await api('rename',{name:v}); toast('已更新名字'); await reload(); }catch(e){ toast(e.message); } return; }
+  if(a==='settle'){
+    const c=S.preview; if(!c) return;
+    const label = prompt('這次結算的名稱', S.cutoff.slice(0,7).replace('-','年')+'月');
+    if(label===null) return;
+    const lines=[`${c.modeName}，截至 ${S.cutoff}，支出 ${money(c.total)}`]
+      .concat(c.returns.map(t=>`${t.name} → 專戶 ${money(t.amount)}`))
+      .concat(c.reimburse.map(t=>`專戶 → ${t.name} ${money(t.amount)}`))
+      .concat(c.transfers.map(t=>`${t.from} → ${t.to} ${money(t.amount)}`))
+      .concat(c.estateClaims.map(t=>`待遺產清償：${t.name} ${money(t.amount)}`));
+    if(!confirm('確定完成結算？\n\n'+lines.join('\n')+'\n\n請記得實際完成上述轉帳。')) return;
+    try{ await api('settle',{bookId:book().id, cutoff:S.cutoff, label, expectTotal:c.total}); toast('結算完成'); await reload(); }catch(e){ toast(e.message); }
+  }
+}
+async function undoSettle(id){
+  if(!confirm('撤銷後，這次結算的紀錄會回到「待對帳」，專戶撥付／退回紀錄也會刪除。確定？')) return;
+  try{ await api('undoSettle',{bookId:book().id, id}); toast('已撤銷'); await reload(); }catch(e){ toast(e.message); }
+}
+
+/* ═══════════ 支出 ═══════════ */
+function closeModal(){ $('#modal').innerHTML=''; }
+function modal(html, sticky){ $('#modal').innerHTML = `<div class="mask" id="mask"><div class="sheet">${html}</div></div>`;
+  if(!sticky) $('#mask').onclick=e=>{ if(e.target.id==='mask') closeModal(); };
+  $('#modal').querySelectorAll('[data-close]').forEach(b=>b.onclick=closeModal); }
+
+function openForm(rec){
+  const r = rec || { date:today(), item:'', amount:'', category:'', payerId:S.me.userId, note:'', beneficiary:bs().defaultBeneficiary||'爸爸' };
+  let cat = r.category, ben = r.beneficiary, receipt=null;
+  const payers = activeMembers().filter(m=>m.role!=='viewer');
+  modal(`<h2>${rec?'修改紀錄':'記一筆'}<small style="font-size:13px;color:var(--sub);font-weight:400">${esc(book().name)}</small><button data-close>✕</button></h2>
+    <div class="field"><label>金額（新台幣）</label><input id="fAmt" class="amount-input" type="number" inputmode="numeric" min="1" placeholder="0" value="${esc(r.amount)}"></div>
+    <div class="field"><label>項目</label><input id="fItem" maxlength="100" placeholder="例：回診、尿布、看護薪資、塔位" value="${esc(r.item)}" list="itemHints">
+      <datalist id="itemHints">${[...new Set(S.records.map(x=>x.item.replace(/\s*\(\d+\)$/,'')))].slice(0,40).map(x=>`<option value="${esc(x)}">`).join('')}</datalist></div>
+    <div class="field"><label>類別</label><div class="catgrid">${S.categories.map(c=>`<button type="button" data-c="${esc(c)}" class="${c===cat?'on':''}">${esc(c)}</button>`).join('')}</div></div>
+    <div class="field"><label>照護對象</label><div class="catgrid c3">${S.beneficiaries.map(b=>`<button type="button" data-b="${esc(b)}" class="${b===ben?'on':''}">${b==='共同'?'爸媽共同':esc(b)}</button>`).join('')}</div></div>
+    <div class="row2"><div class="field"><label>日期</label><input id="fDate" type="date" value="${esc(r.date)}"></div>
+      <div class="field"><label>誰付的錢</label><select id="fPayer">
+        ${payers.map(m=>`<option value="${esc(m.userId)}" ${m.userId===r.payerId?'selected':''}>${esc(m.name)}${m.userId===S.me.userId?'（我）':''}</option>`).join('')}
+        <option value="${FUND_ID}" ${r.payerId===FUND_ID?'selected':''}>${esc(fundShort())}直接付</option>
+        <option value="${ESTATE_ID}" ${r.payerId===ESTATE_ID?'selected':''}>爸爸帳戶（遺產）直接付</option></select></div></div>
+    <div class="field"><label>備註（選填）</label><textarea id="fNote" maxlength="500">${esc(r.note)}</textarea></div>
+    <div class="field"><label>收據照片（選填）</label><input id="fPhoto" type="file" accept="image/*">
+      ${rec&&rec.hasReceipt?'<p class="hint">已附收據。重新選擇會取代。<label><input type="checkbox" id="fRmPhoto"> 移除收據</label></p>':''}
+      <img id="fPrev" class="preview hidden" alt=""></div>
+    <button class="btn" id="fSave">${rec?'儲存修改':'記下來'}</button>`);
+  const pick=(sel,attr,set)=>$('#modal').querySelectorAll(sel).forEach(b=>b.onclick=()=>{ set(b.dataset[attr]);
+    $('#modal').querySelectorAll(sel).forEach(x=>x.classList.toggle('on', x===b)); });
+  pick('[data-c]','c',v=>cat=v); pick('[data-b]','b',v=>ben=v);
+  $('#fPhoto').onchange=async e=>{ const f=e.target.files[0]; if(!f) return;
+    try{ receipt = await shrinkImage(f); $('#fPrev').src=receipt; $('#fPrev').classList.remove('hidden'); }catch(x){ toast('無法讀取圖片'); } };
+  $('#fSave').onclick=async()=>{
+    const data = { amount:Number($('#fAmt').value), item:$('#fItem').value.trim(), category:cat, beneficiary:ben,
+      date:$('#fDate').value, payerId:$('#fPayer').value, note:$('#fNote').value.trim() };
+    if(!(data.amount>0)) return toast('請輸入金額');
+    if(!data.item) return toast('請填寫項目');
+    if(!data.category) return toast('請選擇類別');
+    if(!data.date) return toast('請選擇日期');
+    const removeReceipt = !!($('#fRmPhoto') && $('#fRmPhoto').checked);
+    const btn=$('#fSave'); btn.disabled=true; btn.textContent='儲存中…';
+    try{
+      if(rec) await api('update',{id:rec.id, record:data, receipt, removeReceipt});
+      else await api('add',{bookId:book().id, record:data, receipt});
+      closeModal(); toast(rec?'已修改':'已記下 '+money(data.amount));
+      S.month = data.date.slice(0,7); S.tab='list'; S.listView='list'; await reload();
+    }catch(e){ toast(e.message); btn.disabled=false; btn.textContent=rec?'儲存修改':'記下來'; }
+  };
+}
+function shrinkImage(file){
+  return new Promise((ok,no)=>{
+    const img=new Image(); const url=URL.createObjectURL(file);
+    img.onload=()=>{ const max=1400; let {width:w,height:h}=img;
+      if(Math.max(w,h)>max){ const k=max/Math.max(w,h); w=Math.round(w*k); h=Math.round(h*k); }
+      const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,0,0,w,h);
+      URL.revokeObjectURL(url); ok(c.toDataURL('image/jpeg',0.72)); };
+    img.onerror=no; img.src=url; });
+}
+function openDetail(id){
+  const r = S.records.find(x=>x.id===id); if(!r) return;
+  const mine = r.createdBy===S.me.userId, locked = r.status==='已結清';
+  let btns='';
+  if(mine && !locked && canWrite()) btns = `<div class="row2" style="margin-top:14px"><button class="btn ghost" id="dEdit">修改</button><button class="btn danger" id="dDel">刪除</button></div>`;
+  else if(mine && locked) btns = `<p class="hint">這筆已結清並鎖定。需要更正請管理員撤銷該次結算。</p>`;
+  else if(!mine) btns = `<p class="hint">這筆是 ${esc(r.createdByName)} 記的，只有他本人可以修改或刪除。</p>`;
+  const st = S.settlements.find(s=>s.id===r.settlementId);
+  modal(`<h2>${esc(r.item)}<button data-close>✕</button></h2>
+    <div class="kv"><span>金額</span><span><b>${money(r.amount)}</b></span></div>
+    <div class="kv"><span>日期</span><span>${esc(r.date)}</span></div>
+    <div class="kv"><span>類別</span><span>${esc(r.category)}</span></div>
+    <div class="kv"><span>照護對象</span><span>${r.beneficiary==='共同'?'爸媽共同':esc(r.beneficiary)}</span></div>
+    <div class="kv"><span>付款人</span><span>${esc(memberName(r.payerId))}</span></div>
+    <div class="kv"><span>記錄者</span><span>${esc(r.createdByName)}</span></div>
+    <div class="kv"><span>結算</span><span><span class="st st-${esc(r.status)}">${esc(r.status)}</span>${st?'　'+esc(st.label):''}</span></div>
+    ${r.note?`<div class="kv"><span>備註</span><span>${esc(r.note)}</span></div>`:''}
+    ${hiddenToggle('record',r)}
+    ${r.hasReceipt?'<button class="btn ghost" id="dRcpt" style="margin-top:12px">📎 查看收據</button><div id="dImg"></div>':''}
+    ${btns}`);
+  bindHiddenToggle();
+  if($('#dRcpt')) $('#dRcpt').onclick=async()=>{ $('#dRcpt').textContent='載入中…';
+    try{ const d=await api('receipt',{id}); $('#dImg').innerHTML=`<img class="receipt-img" src="${d.dataUrl}" alt="收據">`; $('#dRcpt').remove(); }
+    catch(e){ toast(e.message); $('#dRcpt').textContent='📎 查看收據'; } };
+  if($('#dEdit')) $('#dEdit').onclick=()=>openForm(r);
+  if($('#dDel')) $('#dDel').onclick=async()=>{ if(!confirm(`確定刪除「${r.item} ${money(r.amount)}」？`)) return;
+    try{ await api('remove',{id}); closeModal(); toast('已刪除'); await reload(); }catch(e){ toast(e.message); } };
+}
+function exportCsv(){
+  let rs = monthRecords(); if(S.mineOnly) rs=rs.filter(r=>r.createdBy===S.me.userId); if(S.cat) rs=rs.filter(r=>r.category===S.cat);
+  rs.sort((a,b)=>a.date.localeCompare(b.date));
+  const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+  const lines=[['帳本','日期','項目','金額','類別','照護對象','付款人','備註','結算狀態','記錄者'].map(q).join(',')]
+    .concat(rs.map(r=>[book().name,r.date,r.item,r.amount,r.category,r.beneficiary,memberName(r.payerId),r.note,r.status,r.createdByName].map(q).join(',')));
+  const blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`${book().name}_${S.month==='all'?'全部':S.month}.csv`; a.click();
+}
+
+/* ═══════════ 預覽模式：在瀏覽器裡執行真正的後端程式（資料只存在記憶體） ═══════════ */
+const DEMO_USERS = [
+  { token:'t_admin', userId:'U_admin', displayName:'Shihmin', name:'士民', group:'士民家' },
+  { token:'t_sil',   userId:'U_sil',   displayName:'嫂',      name:'大嫂', group:'大哥家' },
+  { token:'t_wx',    userId:'U_wx',    displayName:'翔',      name:'偉翔', group:'大哥家' },
+  { token:'t_sis',   userId:'U_sis',   displayName:'妹',      name:'妹妹', group:'' },
+  { token:'t_aunt',  userId:'U_aunt',  displayName:'阿姨',    name:'阿姨', group:'', role:'viewer' },
+  { token:'t_new',   userId:'U_new',   displayName:'Jason',   name:'靖哲', group:'大哥家', pending:true }
+];
+let demoToken = 't_admin';
+const DemoServer = (function(){
+  const sheets = {}, props = { LINE_CHANNEL_ID:'demo', SHEET_ID:'demo' }, files = {};
+  function mkSheet(){ const data=[]; return {
+    getLastRow:()=>data.length, getMaxRows:()=>1000,
+    getRange:(r,c,nr,nc)=>({
+      setValues(v){ v.forEach((row,i)=>{ data[r-1+i]=data[r-1+i]||[]; row.forEach((x,j)=>data[r-1+i][c-1+j]=x); }); return this; },
+      getValues(){ const o=[]; for(let i=0;i<nr;i++) o.push(Array.from({length:nc},(_,j)=>{ const v=(data[r-1+i]||[])[c-1+j]; return v===undefined?'':v; })); return o; },
+      setFontWeight(){ return this; }, setNumberFormat(){ return this; } }),
+    appendRow:(row)=>data.push(row.slice()), setFrozenRows(){} }; }
+  const uuid=()=> 'x'+Math.random().toString(36).slice(2)+Date.now().toString(36);
+  const SpreadsheetApp = { openById:()=>({ getSheetByName:n=>sheets[n], insertSheet:n=>(sheets[n]=mkSheet()) }) };
+  const PropertiesService = { getScriptProperties:()=>({ getProperty:k=>props[k]||null, setProperty:(k,v)=>{ props[k]=v; } }) };
+  const CacheService = { getScriptCache:()=>({ get:()=>null, put(){} }) };
+  const LockService = { getScriptLock:()=>({ waitLock(){}, releaseLock(){} }) };
+  const UrlFetchApp = { fetch:(url,opt)=>{
+    const t = url.includes('access_token=') ? decodeURIComponent(url.split('access_token=')[1]) : (opt&&opt.headers?opt.headers.Authorization.slice(7):'');
+    const u = DEMO_USERS.find(x=>x.token===t);
+    if(!u) return { getResponseCode:()=>400 };
+    return { getResponseCode:()=>200, getContentText:()=> url.includes('verify') ? JSON.stringify({client_id:'demo',expires_in:3600})
+      : JSON.stringify({userId:u.userId, displayName:u.displayName}) }; } };
+  const Utilities = { getUuid:uuid, base64EncodeWebSafe:s=>String(s), computeDigest:(a,s)=>s, DigestAlgorithm:{SHA_256:1},
+    formatDate:d=>{ const z=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate()); },
+    base64Decode:s=>s, base64Encode:b=>b, newBlob:(bytes,type)=>({bytes,type}) };
+  const DriveApp = { createFolder:()=>({ getId:()=>'F', createFile:b=>{ const id=uuid(); files[id]=b; return { getId:()=>id }; } }),
+    getFolderById:()=>({ createFile:b=>{ const id=uuid(); files[id]=b; return { getId:()=>id }; } }),
+    getFileById:id=>({ getBlob:()=>({ getContentType:()=>files[id].type, getBytes:()=>files[id].bytes }) }) };
+  const ContentService = { createTextOutput:s=>({ setMimeType(){ return s; } }), MimeType:{ JSON:1 } };
+  const Logger = { log(){} };
+/**
+ * 爸媽照護共同帳本：Google Apps Script 後端（v2：多本帳）
+ *
+ * 部署：試算表 → 擴充功能 → Apps Script → 貼上本檔 → 部署為「網頁應用程式」
+ *   執行身分：我　／　誰可以存取：任何人
+ * 權限檢查全部在這支程式裡（用 LINE access token 驗證身分），試算表不需分享給家人。
+ *
+ * 指令碼屬性：
+ *   LINE_CHANNEL_ID   LINE Login channel 的 Channel ID（必填）
+ *   SHEET_ID          試算表 ID（從試算表內開啟 Apps Script 可留空）
+ *   RECEIPT_FOLDER_ID 收據資料夾（留空會自動建立）
+ */
+
+var CATEGORIES = ['醫療', '藥品', '看護用品', '用品', '照護服務', '喪葬', '餐食', '交通', '其他'];
+var BENEFICIARIES = ['爸爸', '媽媽', '共同'];
+var STATUSES = ['待對帳', '已結清'];
+var ROLES = ['admin', 'member', 'viewer'];
+
+var BOOK_COLS = ['id', 'name', 'kind', 'state', 'settings', 'createdAt', 'closedAt'];
+var REC_COLS = ['id', 'bookId', 'date', 'item', 'amount', 'category', 'payerId', 'note', 'receiptId', 'status',
+  'beneficiary', 'settlementId', 'hidden', 'createdBy', 'createdAt', 'updatedAt', 'deleted'];
+var MEM_COLS = ['userId', 'name', 'nameSet', 'lineName', 'pictureUrl', 'role', 'state', 'group', 'joinedAt'];
+var FUND_COLS = ['id', 'bookId', 'date', 'type', 'source', 'sourceDetail', 'account', 'amount', 'memberId', 'note',
+  'settlementId', 'hidden', 'createdBy', 'createdAt', 'updatedAt', 'deleted'];
+var SET_COLS = ['id', 'bookId', 'label', 'cutoff', 'mode', 'total', 'fundTotal', 'familyShare', 'recordCount',
+  'detail', 'state', 'createdBy', 'createdAt'];
+var RECON_COLS = ['id', 'bookId', 'date', 'bankBalance', 'ledgerBalance', 'diff', 'note', 'createdBy', 'createdAt'];
+var LOG_COLS = ['time', 'userId', 'name', 'action', 'refId', 'detail'];
+
+var DEFAULT_BOOKS = [
+  { id: 'father', name: '爸爸生前照護及喪葬帳', kind: 'father', settings: {
+    mode: 'fundFirst', cap: 0, lowBalance: 0, fundName: '結清專戶', defaultBeneficiary: '爸爸',
+    groupWeights: { '士民家': 1, '大哥家': 1 }, hideReceiveDefault: true } },
+  { id: 'mother', name: '媽媽照護帳', kind: 'mother', settings: {
+    mode: 'fundFirst', cap: 0, lowBalance: 50000, fundName: '媽媽照護專戶（LINE Bank 友感帳戶）', defaultBeneficiary: '媽媽',
+    groupWeights: { '士民家': 1, '大哥家': 1 }, hideReceiveDefault: false } }
+];
+
+/* ═══════ 結算核心（前後端共用同一份邏輯） ═══════ */
+var SETTLE_MODES = {
+  equal:     { name: '各家均分',               desc: '每個參與分攤的家庭平均負擔，不動用專戶。' },
+  ratio:     { name: '依比例分攤',             desc: '依各家設定的比例負擔（例如 1:1），不動用專戶。' },
+  fund:      { name: '專戶全額支付',           desc: '家人墊付的款項全部由專戶撥還。專戶不夠時無法結算，需先存入。' },
+  fundFirst: { name: '專戶優先，不足依比例分攤', desc: '先用專戶撥還，專戶不夠的部分再依各家比例分攤。' },
+  fundCap:   { name: '專戶每期上限',           desc: '專戶每期最多負擔設定金額（含專戶直接付款），超過的部分依各家比例分攤。' },
+  estate:    { name: '不足列為遺產清償',       desc: '先用專戶撥還，不夠的部分列為「待遺產分割時清償」，家人先不分攤。' }
+};
+var FUND_SOURCES = ['農保喪葬津貼', '遺產分配', '家人出資', '媽媽收入', '政府補助', '上一本結餘',
+  '銀行存款', '股票', '基金', '不動產', '保險理賠', '其他'];
+var FUND_ID = 'FUND';     // 由本帳專戶直接付款
+var ESTATE_ID = 'ESTATE'; // 由爸爸帳戶（遺產）直接付款，不經專戶
+
+/** 專戶餘額。「領取」是家人直接從爸爸帳戶拿的錢，不經過專戶，所以不影響餘額 */
+function computeFundSummary(fundEntries, records) {
+  var s = { deposits: 0, returned: 0, payouts: 0, transferredOut: 0, direct: 0, received: 0, balance: 0, bySource: {} };
+  fundEntries.forEach(function (f) {
+    var a = Number(f.amount) || 0;
+    if (f.type === '存入') { s.deposits += a; s.bySource[f.source || '其他'] = (s.bySource[f.source || '其他'] || 0) + a; }
+    else if (f.type === '退回') s.returned += a;
+    else if (f.type === '撥付') s.payouts += a;
+    else if (f.type === '轉出') s.transferredOut += a;
+    else if (f.type === '領取') s.received += a;
+  });
+  records.forEach(function (r) { if (r.payerId === FUND_ID) s.direct += Number(r.amount) || 0; });
+  s.balance = s.deposits + s.returned - s.payouts - s.transferredOut - s.direct;
+  return s;
+}
+
+function groupOf_(m) { return (m && String(m.group || '').trim()) || (m ? m.name : '?'); }
+
+/**
+ * inp: { records:[{id,amount,payerId}], receipts:[{id,memberId,amount}], members:[{userId,name,group}],
+ *        groupWeights:{家庭:比例}, mode, cap, fundAvailable }
+ */
+function computeSettlement(inp) {
+  var mode = SETTLE_MODES[inp.mode] ? inp.mode : 'equal';
+  var mem = {}, warnings = [];
+  inp.members.forEach(function (m) { mem[m.userId] = m; });
+  var paid = {}, recv = {}, fundDirect = 0, estateDirect = 0, P = 0;
+  var included = [], unknown = [], receiptIds = [];
+  inp.records.forEach(function (r) {
+    var a = Number(r.amount) || 0;
+    if (r.payerId === FUND_ID) { fundDirect += a; included.push(r.id); }
+    else if (r.payerId === ESTATE_ID) { estateDirect += a; included.push(r.id); }
+    else if (r.payerId && mem[r.payerId]) { paid[r.payerId] = (paid[r.payerId] || 0) + a; P += a; included.push(r.id); }
+    else unknown.push(r.id);
+  });
+  (inp.receipts || []).forEach(function (f) {
+    if (mem[f.memberId]) { recv[f.memberId] = (recv[f.memberId] || 0) + (Number(f.amount) || 0); receiptIds.push(f.id); }
+  });
+
+  // 每位成員：墊付 − 已領取。領取多於墊付的部分要退回專戶
+  var ids = {};
+  Object.keys(paid).forEach(function (k) { ids[k] = 1; });
+  Object.keys(recv).forEach(function (k) { ids[k] = 1; });
+  var people = Object.keys(ids).map(function (id) {
+    var p = paid[id] || 0, r = recv[id] || 0;
+    return { id: id, name: mem[id].name, group: groupOf_(mem[id]), paid: p, recv: r,
+      adv: Math.max(0, p - r), hold: Math.max(0, r - p), reimbF: 0, reimb: 0 };
+  });
+  var returns = people.filter(function (x) { return Math.round(x.hold) > 0; })
+    .map(function (x) { return { id: x.id, name: x.name, amount: Math.round(x.hold) }; });
+  var H = returns.reduce(function (s, x) { return s + x.amount; }, 0);
+  var A = people.reduce(function (s, x) { return s + x.adv; }, 0);
+
+  var avail = Math.max(0, Number(inp.fundAvailable) || 0) + H;
+  if ((Number(inp.fundAvailable) || 0) < 0) warnings.push('專戶餘額是負數，請先登記存入');
+  var capacity = 0;
+  if (mode === 'fund' || mode === 'fundFirst' || mode === 'estate') capacity = avail;
+  else if (mode === 'fundCap') capacity = Math.max(0, Math.min(avail, (Number(inp.cap) || 0) - fundDirect));
+  var R = Math.min(capacity, A);
+  var shortfall = mode === 'fund' ? Math.max(0, A - R) : 0;
+  if (shortfall > 0.5) warnings.push('專戶不足 ' + Math.round(shortfall) + ' 元，需先存入才能結算（或改用「專戶優先，不足依比例分攤」）');
+  var S = (mode === 'fund' || mode === 'estate') ? 0 : A - R;
+
+  // 家庭（分攤單位）
+  var gw = inp.groupWeights || {}, groups = {};
+  inp.members.forEach(function (m) {
+    var g = groupOf_(m);
+    if (!groups[g]) groups[g] = { group: g, members: [], w: 0, adv: 0, paid: 0, recv: 0, share: 0, reimb: 0, net: 0 };
+    if (groups[g].members.indexOf(m.name) < 0) groups[g].members.push(m.name);
+  });
+  Object.keys(groups).forEach(function (g) {
+    var w = Number(gw[g]) || 0;
+    groups[g].w = mode === 'equal' ? (w > 0 ? 1 : 0) : w;
+  });
+  var W = Object.keys(groups).reduce(function (s, g) { return s + groups[g].w; }, 0);
+  if (S > 0.5 && W === 0) warnings.push('沒有設定參與分攤的家庭比例，請到「成員」頁設定');
+  people.forEach(function (x) { var g = groups[x.group]; g.adv += x.adv; g.paid += x.paid; g.recv += x.recv; });
+  Object.keys(groups).forEach(function (k) { var g = groups[k]; g.share = W > 0 ? S * g.w / W : 0; });
+
+  // 專戶撥還：優先給「多付」的家庭，家庭內再依各人墊付比例分配
+  var pos = 0;
+  Object.keys(groups).forEach(function (k) { var g = groups[k]; g.excess = g.adv - g.share; if (g.excess > 0) pos += g.excess; });
+  if (R > 0 && pos > 0) {
+    people.forEach(function (x) {
+      var g = groups[x.group];
+      x.reimbF = (g.excess > 0 && g.adv > 0) ? R * (g.excess / pos) * (x.adv / g.adv) : 0;
+    });
+    var target = Math.round(R), acc = 0;
+    people.forEach(function (x) { x.reimb = Math.floor(x.reimbF); acc += x.reimb; });
+    var order = people.slice().sort(function (a, b) { return (b.reimbF - b.reimb) - (a.reimbF - a.reimb); });
+    for (var i = 0; acc < target && i < order.length; i++) { if (order[i].reimbF > 0) { order[i].reimb++; acc++; } }
+  }
+  people.forEach(function (x) { groups[x.group].reimb += x.reimb; });
+  var groupRows = Object.keys(groups).map(function (k) {
+    var g = groups[k]; g.net = g.adv - g.reimb - g.share;
+    return { group: g.group, members: g.members, weight: g.w, paid: g.paid, recv: g.recv, adv: g.adv,
+      reimb: g.reimb, share: g.share, net: g.net };
+  }).filter(function (g) { return g.paid || g.recv || g.weight; });
+
+  var transfers = [], estateClaims = [];
+  if (mode === 'estate') {
+    estateClaims = people.map(function (x) { return { id: x.id, name: x.name, amount: Math.round(x.adv - x.reimb) }; })
+      .filter(function (c) { return c.amount > 0; });
+  } else {
+    var cred = groupRows.filter(function (g) { return g.net > 0.5; }).map(function (g) { return { name: g.group, v: g.net }; });
+    var debt = groupRows.filter(function (g) { return g.net < -0.5; }).map(function (g) { return { name: g.group, v: -g.net }; });
+    cred.sort(function (a, b) { return b.v - a.v; }); debt.sort(function (a, b) { return b.v - a.v; });
+    var a = 0, b = 0;
+    while (a < debt.length && b < cred.length) {
+      var x = Math.min(debt[a].v, cred[b].v);
+      if (Math.round(x) > 0) transfers.push({ from: debt[a].name, to: cred[b].name, amount: Math.round(x) });
+      debt[a].v -= x; cred[b].v -= x;
+      if (debt[a].v < 0.5) a++;
+      if (cred[b].v < 0.5) b++;
+    }
+  }
+  if (unknown.length) warnings.push(unknown.length + ' 筆沒有填付款人，這次不會結算');
+  var reimburse = people.filter(function (x) { return x.reimb > 0; })
+    .map(function (x) { return { id: x.id, name: x.name, amount: x.reimb }; });
+  return {
+    mode: mode, modeName: SETTLE_MODES[mode].name,
+    total: fundDirect + estateDirect + P, fundDirect: fundDirect, estateDirect: estateDirect, memberPaid: P,
+    received: people.reduce(function (s, x) { return s + x.recv; }, 0),
+    fundReimburse: Math.round(R), fundTotal: fundDirect + Math.round(R), familyShare: Math.round(S),
+    estateClaimTotal: estateClaims.reduce(function (s, c) { return s + c.amount; }, 0),
+    people: people.map(function (x) { return { id: x.id, name: x.name, group: x.group, paid: x.paid, recv: x.recv, reimb: x.reimb }; }),
+    groupRows: groupRows, reimburse: reimburse, returns: returns, transfers: transfers, estateClaims: estateClaims,
+    includedIds: included, receiptIds: receiptIds, unknownIds: unknown,
+    blocked: shortfall > 0.5 || (S > 0.5 && W === 0), warnings: warnings
+  };
+}
+
+/** 出資平衡：各家實際出資（家人出資存入＋歷次結算分攤）與約定比例的差距 */
+function computeContribution(fundEntries, settlements, members, groupWeights) {
+  var byId = {}, c = {};
+  members.forEach(function (m) { byId[m.userId] = m; });
+  fundEntries.forEach(function (f) {
+    if (f.type === '存入' && f.source === '家人出資' && byId[f.memberId]) {
+      var g = groupOf_(byId[f.memberId]); c[g] = (c[g] || 0) + (Number(f.amount) || 0);
+    }
+  });
+  settlements.forEach(function (s) {
+    if (s.state !== '有效') return;
+    (s.groupRows || []).forEach(function (g) { if (g.share) c[g.group] = (c[g.group] || 0) + g.share; });
+  });
+  var gw = groupWeights || {}, W = 0;
+  Object.keys(gw).forEach(function (g) { W += Number(gw[g]) || 0; });
+  var total = Object.keys(c).reduce(function (s, g) { return s + c[g]; }, 0);
+  var rows = Object.keys(gw).filter(function (g) { return Number(gw[g]) > 0; }).map(function (g) {
+    var target = W ? total * gw[g] / W : 0;
+    return { group: g, weight: Number(gw[g]), contributed: c[g] || 0, target: target, diff: (c[g] || 0) - target };
+  });
+  return { total: total, rows: rows };
+}
+/* ═══════ 結算核心結束 ═══════ */
+
+
+/* ───────────── 入口 ───────────── */
+
+function doGet() { return json_({ ok: true, app: 'care-ledger', version: 2, time: new Date().toISOString() }); }
+
+function doPost(e) {
+  try {
+    var req = JSON.parse(e.postData.contents || '{}');
+    var me = auth_(req.token);
+    var fn = ACTIONS[req.action];
+    if (!fn) throw err_('BAD_ACTION', '未知的動作');
+    var openToPending = { me: 1, rename: 1 };
+    if (!openToPending[req.action] && me.state !== 'active') throw err_('PENDING', '帳號尚待管理員核准');
+    var readOnly = { me: 1, list: 1, receipt: 1, rename: 1, preview: 1 };
+    if (!readOnly[req.action] && me.role === 'viewer') throw err_('FORBIDDEN', '你是唯讀成員，只能查看');
+    return json_({ ok: true, data: fn(me, req) });
+  } catch (x) {
+    return json_({ ok: false, code: x.code || 'ERROR', message: x.message || String(x) });
+  }
+}
+
+var ACTIONS = {
+  me: function (me) { return bootstrap_(me); },
+  list: function (me) { return bootstrap_(me); },
+  add: addRecord_, update: updateRecord_, remove: removeRecord_, receipt: getReceipt_,
+  fundAdd: fundAdd_, fundUpdate: fundUpdate_, fundRemove: fundRemove_,
+  setHidden: setHidden_, rename: renameSelf_, member: adminMember_,
+  bookSettings: bookSettings_, closeBook: closeBook_, reopenBook: reopenBook_,
+  preview: preview_, settle: settle_, undoSettle: undoSettle_, recon: recon_,
+  groupSave: groupSave_, groupDelete: groupDelete_
+};
+
+/* ───────────── 身分驗證 ───────────── */
+
+function auth_(token) {
+  if (!token) throw err_('AUTH', '請先登入 LINE');
+  var cache = CacheService.getScriptCache();
+  var key = 'tk_' + Utilities.base64EncodeWebSafe(
+    Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, token)).slice(0, 40);
+  var profile, cached = cache.get(key);
+  if (cached) {
+    profile = JSON.parse(cached);
+  } else {
+    var channelId = prop_('LINE_CHANNEL_ID');
+    if (!channelId) throw err_('CONFIG', '尚未設定 LINE_CHANNEL_ID');
+    var v = UrlFetchApp.fetch('https://api.line.me/oauth2/v2.1/verify?access_token=' +
+      encodeURIComponent(token), { muteHttpExceptions: true });
+    if (v.getResponseCode() !== 200) throw err_('AUTH_EXPIRED', '登入已過期，請重新登入');
+    var vj = JSON.parse(v.getContentText());
+    if (String(vj.client_id) !== String(channelId)) throw err_('AUTH', '登入來源不符');
+    var p = UrlFetchApp.fetch('https://api.line.me/v2/profile', {
+      headers: { Authorization: 'Bearer ' + token }, muteHttpExceptions: true });
+    if (p.getResponseCode() !== 200) throw err_('AUTH_EXPIRED', '登入已過期，請重新登入');
+    profile = JSON.parse(p.getContentText());
+    cache.put(key, JSON.stringify(profile), Math.min(600, Math.max(60, (vj.expires_in || 600) - 30)));
+  }
+  return upsertMember_(profile);
+}
+
+function upsertMember_(profile) {
+  var sh = sheet_('Members', MEM_COLS);
+  var rows = readAll_(sh, MEM_COLS);
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].userId === profile.userId) {
+      var m = rows[i];
+      if (m.lineName !== profile.displayName || m.pictureUrl !== (profile.pictureUrl || '')) {
+        m.lineName = profile.displayName; m.pictureUrl = profile.pictureUrl || '';
+        writeRow_(sh, m._row, MEM_COLS, m);
+      }
+      return m;
+    }
+  }
+  return withLock_(function () {
+    var first = readAll_(sh, MEM_COLS).length === 0;
+    var nm = { userId: profile.userId, name: profile.displayName, nameSet: false, lineName: profile.displayName,
+      pictureUrl: profile.pictureUrl || '', role: first ? 'admin' : 'member', state: first ? 'active' : 'pending',
+      group: '', joinedAt: new Date().toISOString() };
+    sh.appendRow(MEM_COLS.map(function (c) { return nm[c]; }));
+    nm._row = sh.getLastRow();
+    log_(nm, first ? 'join_admin' : 'join_request', '', '');
+    return nm;
+  });
+}
+
+/* ───────────── 讀取 ───────────── */
+
+function isTrue_(v) { return v === true || v === 'TRUE'; }
+
+function members_() {
+  return readAll_(sheet_('Members', MEM_COLS), MEM_COLS).map(function (m) {
+    return { userId: m.userId, name: m.name, nameSet: isTrue_(m.nameSet), lineName: m.lineName, pictureUrl: m.pictureUrl,
+      role: m.role, state: m.state, group: m.group || '' };
+  });
+}
+function nameMap_() { var o = {}; members_().forEach(function (m) { o[m.userId] = m.name; }); return o; }
+
+function books_() {
+  var sh = sheet_('Books', BOOK_COLS);
+  var rows = readAll_(sh, BOOK_COLS);
+  if (!rows.length) {
+    var now = new Date().toISOString();
+    DEFAULT_BOOKS.forEach(function (b) {
+      sh.appendRow([b.id, b.name, b.kind, 'open', JSON.stringify(b.settings), now, '']);
+    });
+    rows = readAll_(sh, BOOK_COLS);
+  }
+  return rows.map(function (b) {
+    var s = {}; try { s = JSON.parse(b.settings || '{}'); } catch (e) {}
+    return { _row: b._row, id: b.id, name: b.name, kind: b.kind, state: b.state || 'open', settings: s,
+      createdAt: b.createdAt, closedAt: b.closedAt };
+  });
+}
+function book_(id, mustBeOpen) {
+  var b = books_().filter(function (x) { return x.id === id; })[0];
+  if (!b) throw err_('INPUT', '找不到這本帳');
+  if (mustBeOpen && b.state !== 'open') throw err_('LOCKED', '這本帳已封存，不能再修改');
+  return b;
+}
+function records_() {
+  return readAll_(sheet_('Records', REC_COLS), REC_COLS).filter(function (r) { return !isTrue_(r.deleted); });
+}
+function fund_() {
+  return readAll_(sheet_('Fund', FUND_COLS), FUND_COLS).filter(function (f) { return !isTrue_(f.deleted); });
+}
+function settlements_() {
+  return readAll_(sheet_('Settlements', SET_COLS), SET_COLS).map(function (s) {
+    var d = {}; try { d = JSON.parse(s.detail || '{}'); } catch (e) {}
+    return { id: s.id, bookId: s.bookId, label: s.label, cutoff: fmtDate_(s.cutoff), mode: s.mode, total: Number(s.total),
+      fundTotal: Number(s.fundTotal), familyShare: Number(s.familyShare), recordCount: Number(s.recordCount),
+      state: s.state, createdBy: s.createdBy, createdAt: s.createdAt,
+      reimburse: d.reimburse || [], returns: d.returns || [], transfers: d.transfers || [],
+      groupRows: d.groupRows || [], estateClaims: d.estateClaims || [] };
+  });
+}
+
+/** 隱藏的紀錄只有管理員、建立者、當事人看得到 */
+function canSee_(me, x) {
+  if (!isTrue_(x.hidden)) return true;
+  return me.role === 'admin' || x.createdBy === me.userId || x.memberId === me.userId || x.payerId === me.userId;
+}
+
+function bootstrap_(me) {
+  var members = members_();
+  var books = books_().map(function (b) { delete b._row; return b; });
+  var out = { me: { userId: me.userId, name: me.name, nameSet: isTrue_(me.nameSet), role: me.role, state: me.state },
+    members: members.filter(function (m) { return m.state !== 'removed' || me.role === 'admin'; }),
+    books: books, records: [], fund: [], settlements: [], recon: [], summary: {},
+    categories: CATEGORIES, beneficiaries: BENEFICIARIES, fundSources: FUND_SOURCES,
+    modes: SETTLE_MODES, fundId: FUND_ID, estateId: ESTATE_ID };
+  if (me.state !== 'active') {
+    out.members = members.filter(function (m) { return m.userId === me.userId; });
+    out.books = [];
+    return out;
+  }
+  var names = {}; members.forEach(function (m) { names[m.userId] = m.name; });
+  var recs = records_().map(publicRecord_), fund = fund_().map(publicFund_), sets = settlements_();
+  books.forEach(function (b) {
+    var br = recs.filter(function (r) { return r.bookId === b.id; });
+    var bf = fund.filter(function (f) { return f.bookId === b.id; });
+    var bs = sets.filter(function (s) { return s.bookId === b.id; });
+    out.summary[b.id] = { fund: computeFundSummary(bf, br),
+      contribution: computeContribution(bf, bs, members, b.settings.groupWeights) };
+  });
+  out.records = recs.filter(function (r) { return canSee_(me, r); })
+    .map(function (r) { r.createdByName = names[r.createdBy] || '（已離開）'; return r; });
+  out.fund = fund.filter(function (f) { return canSee_(me, f); })
+    .map(function (f) { f.createdByName = names[f.createdBy] || '（已離開）'; return f; });
+  out.settlements = sets.map(function (s) {
+    s.createdByName = names[s.createdBy] || ''; return s; });
+  out.recon = readAll_(sheet_('Recon', RECON_COLS), RECON_COLS).map(function (r) {
+    return { id: r.id, bookId: r.bookId, date: fmtDate_(r.date), bankBalance: Number(r.bankBalance),
+      ledgerBalance: Number(r.ledgerBalance), diff: Number(r.diff), note: r.note, createdByName: names[r.createdBy] || '' };
+  });
+  return out;
+}
+
+function publicRecord_(r) {
+  return { id: r.id, bookId: r.bookId, date: fmtDate_(r.date), item: r.item, amount: Number(r.amount) || 0,
+    category: r.category, payerId: r.payerId, note: r.note, hasReceipt: !!r.receiptId, status: r.status || '待對帳',
+    beneficiary: r.beneficiary || '爸爸', settlementId: r.settlementId || '', hidden: isTrue_(r.hidden),
+    createdBy: r.createdBy, createdAt: r.createdAt, updatedAt: r.updatedAt };
+}
+function publicFund_(f) {
+  return { id: f.id, bookId: f.bookId, date: fmtDate_(f.date), type: f.type, source: f.source, sourceDetail: f.sourceDetail,
+    account: f.account, amount: Number(f.amount) || 0, memberId: f.memberId || '', note: f.note,
+    settlementId: f.settlementId || '', hidden: isTrue_(f.hidden), createdBy: f.createdBy, createdAt: f.createdAt };
+}
+
+/* ───────────── 支出紀錄 ───────────── */
+
+function cleanFields_(f) {
+  var out = {};
+  if (f.date !== undefined) { if (!/^\d{4}-\d{2}-\d{2}$/.test(f.date)) throw err_('INPUT', '日期格式錯誤'); out.date = f.date; }
+  if (f.item !== undefined) { out.item = String(f.item).trim().slice(0, 100); if (!out.item) throw err_('INPUT', '請填寫項目'); }
+  if (f.amount !== undefined) {
+    out.amount = Math.round(Number(f.amount));
+    if (!(out.amount > 0) || out.amount > 100000000) throw err_('INPUT', '金額需為正數');
+  }
+  if (f.category !== undefined) { if (CATEGORIES.indexOf(f.category) < 0) throw err_('INPUT', '類別不正確'); out.category = f.category; }
+  if (f.beneficiary !== undefined) { if (BENEFICIARIES.indexOf(f.beneficiary) < 0) throw err_('INPUT', '照護對象不正確'); out.beneficiary = f.beneficiary; }
+  if (f.payerId !== undefined) out.payerId = String(f.payerId);
+  if (f.note !== undefined) out.note = String(f.note).slice(0, 500);
+  return out;
+}
+
+function addRecord_(me, req) {
+  var b = book_(req.bookId, true);
+  var f = cleanFields_(req.record || {});
+  ['date', 'item', 'amount', 'category'].forEach(function (k) { if (f[k] === undefined) throw err_('INPUT', '缺少欄位：' + k); });
+  if (!f.payerId) f.payerId = me.userId;
+  checkPayer_(f.payerId);
+  var now = new Date().toISOString();
+  var rec = { id: Utilities.getUuid(), bookId: b.id, date: f.date, item: f.item, amount: f.amount, category: f.category,
+    payerId: f.payerId, note: f.note || '', receiptId: '', status: '待對帳',
+    beneficiary: f.beneficiary || b.settings.defaultBeneficiary || '爸爸', settlementId: '', hidden: false,
+    createdBy: me.userId, createdAt: now, updatedAt: now, deleted: false };
+  if (req.receipt) rec.receiptId = saveReceipt_(req.receipt, rec);
+  withLock_(function () { sheet_('Records', REC_COLS).appendRow(REC_COLS.map(function (c) { return rec[c]; })); });
+  log_(me, 'add', rec.id, b.name + '｜' + rec.item + ' $' + rec.amount);
+  return publicRecord_(rec);
+}
+
+function findOwn_(me, sheetName, cols, id, lockedCheck) {
+  var sh = sheet_(sheetName, cols);
+  var rows = readAll_(sh, cols);
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].id === id && !isTrue_(rows[i].deleted)) {
+      var r = rows[i];
+      if (r.createdBy !== me.userId) throw err_('FORBIDDEN', '只能修改自己建立的紀錄');
+      book_(r.bookId, true);
+      if (lockedCheck) lockedCheck(r);
+      return { sh: sh, r: r };
+    }
+  }
+  throw err_('NOT_FOUND', '找不到這筆紀錄');
+}
+function recLocked_(r) { if (r.status === '已結清' || r.settlementId) throw err_('LOCKED', '已結清的紀錄不能修改，需要更正請管理員撤銷該次結算'); }
+
+function updateRecord_(me, req) {
+  return withLock_(function () {
+    var x = findOwn_(me, 'Records', REC_COLS, req.id, recLocked_);
+    var f = cleanFields_(req.record || {});
+    if (f.payerId !== undefined) checkPayer_(f.payerId);
+    for (var k in f) x.r[k] = f[k];
+    if (req.receipt) x.r.receiptId = saveReceipt_(req.receipt, x.r);
+    if (req.removeReceipt) x.r.receiptId = '';
+    x.r.updatedAt = new Date().toISOString();
+    writeRow_(x.sh, x.r._row, REC_COLS, x.r);
+    log_(me, 'update', x.r.id, JSON.stringify(f));
+    return publicRecord_(x.r);
+  });
+}
+function removeRecord_(me, req) {
+  return withLock_(function () {
+    var x = findOwn_(me, 'Records', REC_COLS, req.id, recLocked_);
+    x.r.deleted = true; x.r.updatedAt = new Date().toISOString();
+    writeRow_(x.sh, x.r._row, REC_COLS, x.r);
+    log_(me, 'delete', x.r.id, x.r.item + ' $' + x.r.amount);
+    return { id: x.r.id };
+  });
+}
+
+function checkPayer_(payerId) {
+  if (payerId === FUND_ID || payerId === ESTATE_ID) return;
+  var ok = members_().some(function (m) { return m.userId === payerId && m.state === 'active'; });
+  if (!ok) throw err_('INPUT', '付款人不是有效成員');
+}
+
+/* ───────────── 專戶：存入／領取 ───────────── */
+
+function cleanFund_(f) {
+  var out = {};
+  if (f.date !== undefined) { if (!/^\d{4}-\d{2}-\d{2}$/.test(f.date)) throw err_('INPUT', '日期格式錯誤'); out.date = f.date; }
+  if (f.amount !== undefined) {
+    out.amount = Math.round(Number(f.amount));
+    if (!(out.amount > 0) || out.amount > 1000000000) throw err_('INPUT', '金額需為正數');
+  }
+  if (f.source !== undefined) { if (FUND_SOURCES.indexOf(f.source) < 0) throw err_('INPUT', '請選擇資金來源'); out.source = f.source; }
+  if (f.sourceDetail !== undefined) out.sourceDetail = String(f.sourceDetail).slice(0, 100);
+  if (f.account !== undefined) {
+    out.account = String(f.account).slice(0, 40);
+    if (/\d{7,}/.test(out.account.replace(/[\s-]/g, ''))) throw err_('INPUT', '帳號請只填末 4 碼，不要填完整帳號');
+  }
+  if (f.memberId !== undefined) out.memberId = String(f.memberId);
+  if (f.note !== undefined) out.note = String(f.note).slice(0, 300);
+  return out;
+}
+
+function fundAdd_(me, req) {
+  var b = book_(req.bookId, true);
+  var type = req.type === '領取' ? '領取' : '存入';
+  var f = cleanFund_(req.entry || {});
+  if (f.date === undefined || f.amount === undefined) throw err_('INPUT', '請填日期與金額');
+  if (type === '存入') {
+    if (!f.source) throw err_('INPUT', '請選擇資金來源');
+    if (f.source === '上一本結餘') throw err_('INPUT', '「上一本結餘」由封存帳本時自動產生');
+    if (f.source === '家人出資') { if (!f.memberId) f.memberId = me.userId; checkPayer_(f.memberId); }
+    else f.memberId = '';
+  } else {
+    if (!f.memberId) f.memberId = me.userId;
+    if (f.memberId !== me.userId && me.role !== 'admin') throw err_('FORBIDDEN', '只能登記自己領取的款項');
+    checkPayer_(f.memberId);
+    f.source = '';
+  }
+  var now = new Date().toISOString();
+  var e = { id: Utilities.getUuid(), bookId: b.id, date: f.date, type: type, source: f.source, sourceDetail: f.sourceDetail || '',
+    account: f.account || '', amount: f.amount, memberId: f.memberId, note: f.note || '', settlementId: '',
+    hidden: type === '領取' && !!b.settings.hideReceiveDefault,
+    createdBy: me.userId, createdAt: now, updatedAt: now, deleted: false };
+  withLock_(function () { sheet_('Fund', FUND_COLS).appendRow(FUND_COLS.map(function (c) { return e[c]; })); });
+  log_(me, 'fund_' + type, e.id, b.name + '｜' + (e.source || '領取') + ' $' + e.amount);
+  return publicFund_(e);
+}
+function fundLocked_(r) {
+  if (r.type !== '存入' && r.type !== '領取') throw err_('LOCKED', '這筆由結算或封存自動產生，不能手動修改');
+  if (r.source === '上一本結餘') throw err_('LOCKED', '這筆由封存帳本自動產生，不能手動修改');
+  if (r.settlementId) throw err_('LOCKED', '這筆已納入結算，需要更正請管理員撤銷該次結算');
+}
+function fundUpdate_(me, req) {
+  return withLock_(function () {
+    var x = findOwn_(me, 'Fund', FUND_COLS, req.id, fundLocked_);
+    var f = cleanFund_(req.entry || {});
+    if (x.r.type === '存入' && f.source === '上一本結餘') throw err_('INPUT', '不能選這個來源');
+    if (f.memberId !== undefined) checkPayer_(f.memberId);
+    for (var k in f) x.r[k] = f[k];
+    if (x.r.type === '存入' && x.r.source !== '家人出資') x.r.memberId = '';
+    x.r.updatedAt = new Date().toISOString();
+    writeRow_(x.sh, x.r._row, FUND_COLS, x.r);
+    log_(me, 'fund_update', x.r.id, JSON.stringify(f));
+    return publicFund_(x.r);
+  });
+}
+function fundRemove_(me, req) {
+  return withLock_(function () {
+    var x = findOwn_(me, 'Fund', FUND_COLS, req.id, fundLocked_);
+    x.r.deleted = true; x.r.updatedAt = new Date().toISOString();
+    writeRow_(x.sh, x.r._row, FUND_COLS, x.r);
+    log_(me, 'fund_delete', x.r.id, (x.r.source || x.r.type) + ' $' + x.r.amount);
+    return { id: x.r.id };
+  });
+}
+
+/** 管理員設定某筆支出或專戶紀錄是否公開給其他成員 */
+function setHidden_(me, req) {
+  requireAdmin_(me);
+  var target = req.kind === 'fund' ? ['Fund', FUND_COLS] : ['Records', REC_COLS];
+  return withLock_(function () {
+    var sh = sheet_(target[0], target[1]);
+    var r = readAll_(sh, target[1]).filter(function (x) { return x.id === req.id; })[0];
+    if (!r) throw err_('NOT_FOUND', '找不到這筆紀錄');
+    r.hidden = !!req.hidden; r.updatedAt = new Date().toISOString();
+    writeRow_(sh, r._row, target[1], r);
+    log_(me, 'hidden', r.id, String(!!req.hidden));
+    return { id: r.id, hidden: !!req.hidden };
+  });
+}
+
+/* ───────────── 帳本設定、封存 ───────────── */
+
+function writeBook_(b) {
+  var sh = sheet_('Books', BOOK_COLS);
+  writeRow_(sh, b._row, BOOK_COLS, { id: b.id, name: b.name, kind: b.kind, state: b.state,
+    settings: JSON.stringify(b.settings), createdAt: b.createdAt, closedAt: b.closedAt || '' });
+}
+
+function bookSettings_(me, req) {
+  requireAdmin_(me);
+  var b = book_(req.bookId, false), n = req.settings || {}, s = b.settings;
+  if (req.name !== undefined) { var nm = String(req.name).trim().slice(0, 30); if (!nm) throw err_('INPUT', '請輸入帳本名稱'); b.name = nm; }
+  if (n.mode !== undefined) { if (!SETTLE_MODES[n.mode]) throw err_('INPUT', '結算方式不正確'); s.mode = n.mode; }
+  if (n.cap !== undefined) s.cap = Math.max(0, Math.round(Number(n.cap) || 0));
+  if (n.lowBalance !== undefined) s.lowBalance = Math.max(0, Math.round(Number(n.lowBalance) || 0));
+  if (n.fundName !== undefined) { var fn = String(n.fundName).trim().slice(0, 40); if (fn) s.fundName = fn; }
+  if (n.defaultBeneficiary !== undefined && BENEFICIARIES.indexOf(n.defaultBeneficiary) >= 0) s.defaultBeneficiary = n.defaultBeneficiary;
+  if (n.hideReceiveDefault !== undefined) s.hideReceiveDefault = !!n.hideReceiveDefault;
+  if (n.groupWeights !== undefined) {
+    var gw = {};
+    Object.keys(n.groupWeights).forEach(function (g) {
+      var k = String(g).trim().slice(0, 20), w = Number(n.groupWeights[g]);
+      if (k && w >= 0 && w <= 100) gw[k] = w;
+    });
+    s.groupWeights = gw;
+  }
+  withLock_(function () { writeBook_(b); });
+  log_(me, 'book_settings', b.id, JSON.stringify(s));
+  return { id: b.id };
+}
+
+function closeBook_(me, req) {
+  requireAdmin_(me);
+  return withLock_(function () {
+    var b = book_(req.bookId, true);
+    var recs = records_().filter(function (r) { return r.bookId === b.id; });
+    var fund = fund_().filter(function (f) { return f.bookId === b.id; });
+    var openRecs = recs.filter(function (r) { return r.status !== '已結清'; }).length;
+    var openRecv = fund.filter(function (f) { return f.type === '領取' && !f.settlementId; }).length;
+    if (openRecs || openRecv) throw err_('INPUT', '還有 ' + (openRecs + openRecv) + ' 筆未結算，請先完成結算再封存');
+    var bal = computeFundSummary(fund.map(publicFund_), recs.map(publicRecord_)).balance;
+    var now = new Date().toISOString(), today = fmtDate_(new Date());
+    if (bal > 0 && req.transferTo) {
+      var t = book_(req.transferTo, true);
+      if (t.id === b.id) throw err_('INPUT', '不能轉給自己');
+      var fsh = sheet_('Fund', FUND_COLS);
+      var mk = function (bookId, type, source, note) {
+        return { id: Utilities.getUuid(), bookId: bookId, date: today, type: type, source: source, sourceDetail: '',
+          account: '', amount: bal, memberId: '', note: note, settlementId: '', hidden: false,
+          createdBy: me.userId, createdAt: now, updatedAt: now, deleted: false };
+      };
+      fsh.appendRow(FUND_COLS.map(function (c) { return mk(b.id, '轉出', '', '封存，結餘轉入「' + t.name + '」')[c]; }));
+      fsh.appendRow(FUND_COLS.map(function (c) { return mk(t.id, '存入', '上一本結餘', '來自「' + b.name + '」結餘')[c]; }));
+    }
+    b.state = 'closed'; b.closedAt = now; writeBook_(b);
+    log_(me, 'close_book', b.id, '結餘 ' + bal + (req.transferTo ? ' → ' + req.transferTo : ''));
+    return { balance: bal, transferred: bal > 0 && !!req.transferTo };
+  });
+}
+function reopenBook_(me, req) {
+  requireAdmin_(me);
+  return withLock_(function () {
+    var b = book_(req.bookId, false);
+    b.state = 'open'; b.closedAt = ''; writeBook_(b);
+    log_(me, 'reopen_book', b.id, '');
+    return { ok: true };
+  });
+}
+
+/* ───────────── 結算 ───────────── */
+
+function settlementInput_(b, cutoff) {
+  var recs = records_().map(publicRecord_).filter(function (r) { return r.bookId === b.id; });
+  var fund = fund_().map(publicFund_).filter(function (f) { return f.bookId === b.id; });
+  var fs = computeFundSummary(fund, recs);
+  return {
+    records: recs.filter(function (r) { return r.status !== '已結清' && r.date <= cutoff; }),
+    receipts: fund.filter(function (f) { return f.type === '領取' && !f.settlementId && f.date <= cutoff; }),
+    members: members_().filter(function (m) { return m.state === 'active'; }),
+    groupWeights: b.settings.groupWeights || {}, mode: b.settings.mode, cap: b.settings.cap, fundAvailable: fs.balance
+  };
+}
+function checkCutoff_(c) { if (!/^\d{4}-\d{2}-\d{2}$/.test(String(c || ''))) throw err_('INPUT', '請選擇結算截止日'); return String(c); }
+
+function preview_(me, req) {
+  var b = book_(req.bookId, false);
+  return computeSettlement(settlementInput_(b, checkCutoff_(req.cutoff)));
+}
+
+function settle_(me, req) {
+  requireAdmin_(me);
+  var cutoff = checkCutoff_(req.cutoff);
+  return withLock_(function () {
+    var b = book_(req.bookId, true);
+    var c = computeSettlement(settlementInput_(b, cutoff));
+    if (!c.includedIds.length && !c.receiptIds.length) throw err_('INPUT', '沒有可結算的紀錄');
+    if (c.blocked) throw err_('BLOCKED', c.warnings.join('；'));
+    if (req.expectTotal !== undefined && Math.round(req.expectTotal) !== Math.round(c.total)) {
+      throw err_('STALE', '資料剛有變動，請重新整理後再結算');
+    }
+    var now = new Date().toISOString(), today = fmtDate_(new Date()), sid = Utilities.getUuid();
+    var label = String(req.label || '').slice(0, 30) || (cutoff.slice(0, 7).replace('-', '年') + '月');
+    var fsh = sheet_('Fund', FUND_COLS);
+    var entry = function (type, x, note) {
+      var e = { id: Utilities.getUuid(), bookId: b.id, date: today, type: type, source: '', sourceDetail: '', account: '',
+        amount: x.amount, memberId: x.id, note: label + ' ' + note, settlementId: sid, hidden: false,
+        createdBy: me.userId, createdAt: now, updatedAt: now, deleted: false };
+      fsh.appendRow(FUND_COLS.map(function (k) { return e[k]; }));
+    };
+    c.returns.forEach(function (x) { entry('退回', x, '結算：領取多於墊付，退回專戶'); });
+    c.reimburse.forEach(function (x) { entry('撥付', x, '結算撥還'); });
+    var recIds = {}; c.receiptIds.forEach(function (id) { recIds[id] = true; });
+    readAll_(fsh, FUND_COLS).forEach(function (f) {
+      if (recIds[f.id]) { f.settlementId = sid; f.updatedAt = now; writeRow_(fsh, f._row, FUND_COLS, f); }
+    });
+    var inc = {}; c.includedIds.forEach(function (id) { inc[id] = true; });
+    var rsh = sheet_('Records', REC_COLS);
+    readAll_(rsh, REC_COLS).forEach(function (r) {
+      if (inc[r.id]) { r.status = '已結清'; r.settlementId = sid; r.updatedAt = now; writeRow_(rsh, r._row, REC_COLS, r); }
+    });
+    var row = { id: sid, bookId: b.id, label: label, cutoff: cutoff, mode: c.mode, total: c.total, fundTotal: c.fundTotal,
+      familyShare: c.familyShare, recordCount: c.includedIds.length,
+      detail: JSON.stringify({ reimburse: c.reimburse, returns: c.returns, transfers: c.transfers,
+        groupRows: c.groupRows, estateClaims: c.estateClaims }),
+      state: '有效', createdBy: me.userId, createdAt: now };
+    sheet_('Settlements', SET_COLS).appendRow(SET_COLS.map(function (k) { return row[k]; }));
+    log_(me, 'settle', sid, b.name + '｜' + label + ' ' + c.modeName + ' $' + c.total);
+    return { id: sid, result: c };
+  });
+}
+
+function undoSettle_(me, req) {
+  requireAdmin_(me);
+  return withLock_(function () {
+    var ssh = sheet_('Settlements', SET_COLS);
+    var all = readAll_(ssh, SET_COLS).filter(function (s) { return s.state === '有效' && s.bookId === req.bookId; });
+    var last = all[all.length - 1];
+    if (!last || last.id !== req.id) throw err_('INPUT', '只能撤銷這本帳最近一次的結算');
+    book_(last.bookId, true);
+    var now = new Date().toISOString();
+    var fsh = sheet_('Fund', FUND_COLS);
+    readAll_(fsh, FUND_COLS).forEach(function (f) {
+      if (f.settlementId !== last.id || isTrue_(f.deleted)) return;
+      if (f.type === '撥付' || f.type === '退回') f.deleted = true; else f.settlementId = '';
+      f.updatedAt = now; writeRow_(fsh, f._row, FUND_COLS, f);
+    });
+    var rsh = sheet_('Records', REC_COLS);
+    readAll_(rsh, REC_COLS).forEach(function (r) {
+      if (r.settlementId === last.id) { r.status = '待對帳'; r.settlementId = ''; r.updatedAt = now; writeRow_(rsh, r._row, REC_COLS, r); }
+    });
+    last.state = '已撤銷'; writeRow_(ssh, last._row, SET_COLS, last);
+    log_(me, 'undo_settle', last.id, last.label);
+    return { ok: true };
+  });
+}
+
+/* ───────────── 銀行對帳 ───────────── */
+
+function recon_(me, req) {
+  requireAdmin_(me);
+  var b = book_(req.bookId, false);
+  var date = checkCutoff_(req.date);
+  var bank = Math.round(Number(req.bankBalance));
+  if (!(bank >= 0)) throw err_('INPUT', '請輸入銀行實際餘額');
+  var recs = records_().map(publicRecord_).filter(function (r) { return r.bookId === b.id; });
+  var fund = fund_().map(publicFund_).filter(function (f) { return f.bookId === b.id; });
+  var ledger = computeFundSummary(fund, recs).balance;
+  var row = { id: Utilities.getUuid(), bookId: b.id, date: date, bankBalance: bank, ledgerBalance: ledger,
+    diff: bank - ledger, note: String(req.note || '').slice(0, 200), createdBy: me.userId, createdAt: new Date().toISOString() };
+  withLock_(function () { sheet_('Recon', RECON_COLS).appendRow(RECON_COLS.map(function (k) { return row[k]; })); });
+  log_(me, 'recon', row.id, b.name + ' 銀行 ' + bank + ' 帳本 ' + ledger);
+  return row;
+}
+
+/* ───────────── 成員 ───────────── */
+
+function renameSelf_(me, req) {
+  var name = String(req.name || '').trim().slice(0, 20);
+  if (!name) throw err_('INPUT', '請輸入名稱');
+  me.name = name; me.nameSet = true;
+  writeRow_(sheet_('Members', MEM_COLS), me._row, MEM_COLS, me);
+  log_(me, 'rename', '', name);
+  return { name: name };
+}
+
+function adminMember_(me, req) {
+  requireAdmin_(me);
+  var sh = sheet_('Members', MEM_COLS);
+  var m = readAll_(sh, MEM_COLS).filter(function (r) { return r.userId === req.userId; })[0];
+  if (!m) throw err_('NOT_FOUND', '找不到成員');
+  if (m.userId === me.userId && (req.op === 'remove' || req.op === 'role')) throw err_('INPUT', '不能移除自己或改自己的權限');
+  switch (req.op) {
+    case 'approve': m.state = 'active'; if (ROLES.indexOf(req.value) >= 0 && req.value !== 'admin') m.role = req.value; break;
+    case 'remove': m.state = 'removed'; break;
+    case 'role': if (ROLES.indexOf(req.value) < 0) throw err_('INPUT', '權限不正確'); m.role = req.value; break;
+    case 'group': m.group = String(req.value || '').trim().slice(0, 20); break;
+    case 'rename':
+      var nm = String(req.value || '').trim().slice(0, 20);
+      if (!nm) throw err_('INPUT', '請輸入名稱'); m.name = nm; m.nameSet = true; break;
+    default: throw err_('INPUT', '未知操作');
+  }
+  writeRow_(sh, m._row, MEM_COLS, m);
+  log_(me, 'member_' + req.op, m.userId, m.name + (req.value !== undefined ? ' ' + req.value : ''));
+  return { ok: true };
+}
+
+/* ───────────── 合併計算（家庭）：多位成員合成一個分攤單位 ───────────── */
+
+function groupSave_(me, req) {
+  requireAdmin_(me);
+  var name = String(req.name || '').trim().slice(0, 20);
+  if (!name) throw err_('INPUT', '請輸入合併計算的名稱');
+  var oldName = String(req.oldName || '').trim();
+  var ids = {}; (req.userIds || []).forEach(function (u) { ids[u] = true; });
+  if (!Object.keys(ids).length) throw err_('INPUT', '請至少勾選一位成員');
+  return withLock_(function () {
+    var sh = sheet_('Members', MEM_COLS), rows = readAll_(sh, MEM_COLS);
+    if (oldName !== name && rows.some(function (m) { return m.group === name && !ids[m.userId] && m.group !== oldName; })) {
+      throw err_('INPUT', '已經有「' + name + '」，請換一個名稱或直接編輯它');
+    }
+    var found = 0;
+    rows.forEach(function (m) {
+      var was = m.group, next = was;
+      if (ids[m.userId]) { next = name; found++; }
+      else if (was === name || (oldName && was === oldName)) next = '';
+      if (next !== was) { m.group = next; writeRow_(sh, m._row, MEM_COLS, m); }
+    });
+    if (found !== Object.keys(ids).length) throw err_('INPUT', '有成員不存在');
+    books_().forEach(function (b) {
+      var gw = b.settings.groupWeights || {}, w = gw[name];
+      if (oldName && oldName !== name && gw[oldName] !== undefined) { if (w === undefined) w = gw[oldName]; delete gw[oldName]; }
+      if (req.weights && req.weights[b.id] !== undefined) {
+        var v = Number(req.weights[b.id]);
+        if (!(v >= 0) || v > 100) throw err_('INPUT', '比例需介於 0 到 100');
+        w = v;
+      }
+      if (w !== undefined) gw[name] = w;
+      b.settings.groupWeights = gw; writeBook_(b);
+    });
+    log_(me, 'group_save', '', (oldName && oldName !== name ? oldName + '→' : '') + name + '：' + Object.keys(ids).length + ' 人');
+    return { name: name };
+  });
+}
+
+function groupDelete_(me, req) {
+  requireAdmin_(me);
+  var name = String(req.name || '').trim();
+  if (!name) throw err_('INPUT', '缺少名稱');
+  return withLock_(function () {
+    var sh = sheet_('Members', MEM_COLS);
+    readAll_(sh, MEM_COLS).forEach(function (m) { if (m.group === name) { m.group = ''; writeRow_(sh, m._row, MEM_COLS, m); } });
+    books_().forEach(function (b) {
+      var gw = b.settings.groupWeights || {};
+      if (gw[name] !== undefined) { delete gw[name]; b.settings.groupWeights = gw; writeBook_(b); }
+    });
+    log_(me, 'group_delete', '', name);
+    return { ok: true };
+  });
+}
+
+function requireAdmin_(me) { if (me.role !== 'admin') throw err_('FORBIDDEN', '只有管理員可以執行'); }
+
+/* ───────────── 收據（存於擁有者雲端硬碟，不公開） ───────────── */
+
+function saveReceipt_(dataUrl, rec) {
+  var m = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(dataUrl);
+  if (!m) throw err_('INPUT', '收據格式需為圖片');
+  var bytes = Utilities.base64Decode(m[2]);
+  if (bytes.length > 4 * 1024 * 1024) throw err_('INPUT', '圖片太大');
+  var blob = Utilities.newBlob(bytes, m[1], rec.date + '_' + rec.item + '_' + rec.id.slice(0, 8));
+  return receiptFolder_().createFile(blob).getId();
+}
+function getReceipt_(me, req) {
+  var r = records_().filter(function (x) { return x.id === req.id; })[0];
+  if (!r || !r.receiptId || !canSee_(me, r)) throw err_('NOT_FOUND', '沒有收據');
+  var blob = DriveApp.getFileById(r.receiptId).getBlob();
+  return { dataUrl: 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes()) };
+}
+function receiptFolder_() {
+  var id = prop_('RECEIPT_FOLDER_ID');
+  if (id) { try { return DriveApp.getFolderById(id); } catch (e) {} }
+  var f = DriveApp.createFolder('爸媽照護帳本_收據');
+  PropertiesService.getScriptProperties().setProperty('RECEIPT_FOLDER_ID', f.getId());
+  return f;
+}
+
+/* ───────────── 試算表工具 ───────────── */
+
+function ss_() { var id = prop_('SHEET_ID'); return id ? SpreadsheetApp.openById(id) : SpreadsheetApp.getActiveSpreadsheet(); }
+
+function sheet_(name, cols) {
+  var ss = ss_(), sh = ss.getSheetByName(name);
+  if (!sh) {
+    sh = ss.insertSheet(name);
+    sh.getRange(1, 1, 1, cols.length).setValues([cols]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+    ['date', 'cutoff'].forEach(function (c) {   // 日期以文字存，避免時區偏移
+      var i = cols.indexOf(c);
+      if (i >= 0) sh.getRange(1, i + 1, sh.getMaxRows(), 1).setNumberFormat('@');
+    });
+  }
+  return sh;
+}
+function readAll_(sh, cols) {
+  var n = sh.getLastRow() - 1;
+  if (n < 1) return [];
+  return sh.getRange(2, 1, n, cols.length).getValues().map(function (row, i) {
+    var o = { _row: i + 2 }; cols.forEach(function (c, j) { o[c] = row[j]; }); return o;
+  });
+}
+function writeRow_(sh, rowNum, cols, obj) {
+  sh.getRange(rowNum, 1, 1, cols.length).setValues([cols.map(function (c) { return obj[c] === undefined ? '' : obj[c]; })]);
+}
+function withLock_(fn) {
+  var lock = LockService.getScriptLock(); lock.waitLock(15000);
+  try { return fn(); } finally { lock.releaseLock(); }
+}
+function log_(me, action, refId, detail) {
+  try { sheet_('Log', LOG_COLS).appendRow([new Date().toISOString(), me.userId, me.name, action, refId, detail]); } catch (e) {}
+}
+function fmtDate_(d) {
+  if (d instanceof Date) return Utilities.formatDate(d, 'Asia/Taipei', 'yyyy-MM-dd');
+  return String(d || '');
+}
+function prop_(k) { return PropertiesService.getScriptProperties().getProperty(k); }
+function err_(code, msg) { var e = new Error(msg); e.code = code; return e; }
+function json_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
+
+/** 第一次部署前手動執行一次：建立工作表、兩本預設帳本，並完成授權 */
+function setup() {
+  sheet_('Members', MEM_COLS); books_(); sheet_('Records', REC_COLS); sheet_('Fund', FUND_COLS);
+  sheet_('Settlements', SET_COLS); sheet_('Recon', RECON_COLS); sheet_('Log', LOG_COLS);
+  receiptFolder_();
+  UrlFetchApp.fetch('https://api.line.me/', { muteHttpExceptions: true });
+  Logger.log('完成。LINE_CHANNEL_ID = ' + prop_('LINE_CHANNEL_ID'));
+}
+
+/**
+ * 一次性匯入：Notion「💙 爸媽醫療照護支出」既有 30 筆紀錄（合計 $56,657）→「爸爸生前照護及喪葬帳」
+ *
+ * 使用時機：管理員（你）已經用 LINE 登入帳本一次之後，
+ * 在 Apps Script 編輯器上方選 importFromNotion → 執行。只會匯入一次。
+ * ・記錄者與付款人都設為管理員（Notion 付款人皆為「士民」）
+ */
+var NOTION_ROWS = [
+  ["2026-10-27", "大樹藥局", 310, "藥品", "士民", "棉花棒 生理食鹽4瓶"],
+  ["2026-10-27", "屏基回診", 150, "醫療", "士民", ""],
+  ["2026-10-20", "出院費用", 3840, "醫療", "士民", ""],
+  ["2026-10-20", "消毒用酒精", 227, "藥品", "士民", "藥用酒精"],
+  ["2026-10-19", "維康醫療用品 (4)", 128, "看護用品", "士民", "濕紙巾衛生紙。"],
+  ["2026-10-13", "遠傳電信費用", 2426, "其他", "士民", "電信費"],
+  ["2026-10-10", "屏基醫療費", 19529, "醫療", "士民", "住院費"],
+  ["2026-10-10", "里港藥局", 600, "看護用品", "士民", "搗藥鉢尿布整理盒"],
+  ["2026-10-09", "給看護的餐費 (3)", 2000, "照護服務", "士民", ""],
+  ["2026-10-08", "租借輔具", 2600, "看護用品", "士民", "租借電動床氣墊床"],
+  ["2026-10-08", "網購看護用品", 2294, "看護用品", "士民", "側枕翻身枕移位帶"],
+  ["2026-10-05", "大樹用品 (4)", 1547, "看護用品", "士民", "傷口敷料"],
+  ["2026-10-03", "維康醫療用品 (3)", 1158, "看護用品", "士民", "尿布看護墊濕紙巾膠帶台、紗布棉花棒"],
+  ["2026-10-03", "給看護的餐費 (2)", 1000, "照護服務", "士民", ""],
+  ["2026-09-30", "大樹用品 (3)", 499, "看護用品", "士民", "口罩"],
+  ["2026-09-29", "維康醫療用品 (2)", 297, "看護用品", "士民", ""],
+  ["2026-09-29", "給看護的餐費 (1)", 1000, "照護服務", "士民", ""],
+  ["2026-09-28", "杏一醫療用品 (1)", 158, "看護用品", "士民", "護唇膏"],
+  ["2026-09-27", "大樹用品 (2)", 1138, "看護用品", "士民", ""],
+  ["2026-09-25", "給看護的餐費", 1000, "照護服務", "士民", ""],
+  ["2026-09-25", "維康醫療用品 (1)", 498, "藥品", "士民", ""],
+  ["2026-09-24", "維康醫療用品", 739, "藥品", "士民", ""],
+  ["2026-09-23", "維康醫療用品 (1)", 414, "藥品", "士民", ""],
+  ["2026-09-22", "給看護的餐費", 1000, "照護服務", "士民", ""],
+  ["2026-09-22", "維康醫療用品 (2)", 182, "藥品", "士民", ""],
+  ["2026-09-14", "給看護的餐費 (1)", 1000, "照護服務", "士民", ""],
+  ["2026-09-08", "給看護的零用金", 2000, "照護服務", "士民", ""],
+  ["2026-09-08", "屈臣氏用品", 788, "藥品", "士民", "刮鬍刀"],
+  ["2026-09-08", "杏一醫療用品", 3135, "藥品", "士民", ""],
+  ["2026-09-03", "看護的床", 5000, "看護用品", "士民", "床"]
+];
+
+function importFromNotion() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('NOTION_IMPORTED')) throw new Error('已經匯入過了');
+  var admin = members_().filter(function (m) { return m.role === 'admin' && m.state === 'active'; })[0];
+  if (!admin) throw new Error('請先用 LINE 登入帳本一次，成為管理員後再匯入');
+  book_('father', true);
+  var now = new Date().toISOString();
+  var out = NOTION_ROWS.map(function (r) {
+    var rec = {
+      id: Utilities.getUuid(), bookId: 'father', date: r[0], item: r[1], amount: r[2], category: r[3],
+      payerId: r[4] === '士民' ? admin.userId : '', note: r[5] || '', receiptId: '', status: '待對帳',
+      beneficiary: '爸爸', settlementId: '', hidden: false,
+      createdBy: admin.userId, createdAt: now, updatedAt: now, deleted: false
+    };
+    return REC_COLS.map(function (c) { return rec[c]; });
+  });
+  var sh = sheet_('Records', REC_COLS);
+  sh.getRange(sh.getLastRow() + 1, 1, out.length, REC_COLS.length).setValues(out);
+  props.setProperty('NOTION_IMPORTED', now);
+  Logger.log('已匯入 ' + out.length + ' 筆');
+}
+
+  return { doPost, importFromNotion };
+})();
+function demoCall(token, action, p){ return JSON.parse(DemoServer.doPost({ postData:{ contents: JSON.stringify(Object.assign({ action, token }, p||{})) } })); }
+function demoInit(){
+  const admin = DEMO_USERS[0];
+  DEMO_USERS.forEach(u=>{ demoCall(u.token,'me'); demoCall(u.token,'rename',{name:u.name}); });
+  DEMO_USERS.forEach(u=>{
+    if(u.userId!==admin.userId && !u.pending) demoCall(admin.token,'member',{userId:u.userId, op:'approve', value:u.role||'member'});
+    if(u.group) demoCall(admin.token,'member',{userId:u.userId, op:'group', value:u.group});
+  });
+  DemoServer.importFromNotion();
+  const add=(t,b,r)=>demoCall(t,'add',{bookId:b, record:r});
+  add('t_admin','father',{date:'2026-11-19',item:'塔位',amount:60000,category:'喪葬',beneficiary:'爸爸'});
+  demoCall('t_wx','fundAdd',{bookId:'father',type:'領取',entry:{date:'2026-11-12',amount:300000,note:'賣股票款，用來支付禮儀公司'}});
+  add('t_wx','father',{date:'2026-11-19',item:'禮儀公司',amount:280000,category:'喪葬',note:'（預覽範例金額）'});
+  add('t_sil','father',{date:'2026-10-31',item:'一對一看護薪資與生活費',amount:120000,category:'照護服務',note:'（預覽範例金額）'});
+  demoCall('t_admin','fundAdd',{bookId:'father',entry:{date:'2026-11-26',amount:306000,source:'農保喪葬津貼',sourceDetail:'20,400 × 15 個月'}});
+  add('t_sil','mother',{date:'2026-11-25',item:'媽媽回診',amount:350,category:'醫療'});
+}
+function demoApi(action,p){
+  return new Promise((ok,no)=>setTimeout(()=>{ const r=demoCall(demoToken, action, p);
+    if(r.ok) ok(r.data); else { const e=new Error(r.message); e.code=r.code; no(e); } }, 80));
+}
+function demoBar(){
+  if(!DEMO) return '';
+  return `<div class="demo">🔧 預覽模式：資料不會儲存。切換身分看看權限差異：
+    <select id="demoWho">${DEMO_USERS.map(u=>`<option value="${u.token}" ${u.token===demoToken?'selected':''}>${u.name}${u.role==='viewer'?'（唯讀）':''}${u.pending?'（待核准）':''}</option>`).join('')}</select></div>`;
+}
+function bindDemoBar(){ const s=$('#demoWho'); if(s) s.onchange=async()=>{ demoToken=s.value; closeModal();
+  Object.assign(S, await api('me')); S.tab='list'; S.preview=null;
+  if(S.me.state!=='active'){ $('#nav').classList.add('hidden'); renderWho(); renderPending(); }
+  else { if(!S.books.some(b=>b.id===S.bookId)) S.bookId=S.books[0].id; $('#nav').classList.remove('hidden'); render(); } }; }
+
+if(DEMO) demoInit();
+start();
+</script>
+</body>
+</html>
