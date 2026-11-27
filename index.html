@@ -150,6 +150,12 @@ th{font-size:12px;color:var(--sub);font-weight:500}
 .card.fund.dad{background:linear-gradient(135deg,#2b7a55,#3fa877)}
 nav .add.off{background:#b9c3d0;box-shadow:none}
 .inp{flex:1;border:1px solid var(--line);border-radius:10px;padding:10px}
+#busy{position:fixed;inset:0;z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(255,255,255,0);cursor:wait;touch-action:none}
+#busy.hidden{display:none}
+#busy .spin,#busy .busytxt{opacity:0;animation:busyin .2s .35s forwards}
+#busy .spin{width:34px;height:34px;border:4px solid #ddd;border-top-color:#06c755;border-radius:50%;animation:busyin .2s .35s forwards,busyspin .8s linear infinite}
+#busy .busytxt{margin-top:10px;font-size:14px;color:#555;background:rgba(255,255,255,.9);padding:4px 12px;border-radius:12px}
+@keyframes busyin{to{opacity:1}} @keyframes busyspin{to{transform:rotate(360deg)}}
 </style>
 <style>
 .bookbar{display:flex;align-items:center;gap:8px;background:var(--card);border-radius:var(--radius);padding:10px 14px;margin-bottom:10px;border:1px solid var(--line)}
@@ -191,13 +197,14 @@ nav .add.off{background:#b9c3d0;box-shadow:none}
 </nav>
 
 <div id="modal"></div>
+<div id="busy" class="hidden"><div class="spin"></div><div class="busytxt">處理中，請稍候…</div></div>
 <div id="toast" class="toast hidden"></div>
 
 <script>
 /* ═══════════ 設定：部署後填入這兩個值 ═══════════ */
 const CONFIG = {
   LIFF_ID: '2012321718-by9bc1DH',   // 例：2001234567-AbCdEfGh
-  GAS_URL: 'https://script.google.com/macros/s/AKfycbwYFs_OaAMhQbKPJVgAtj4Ae44sJ1nHSpi4uFtPj2s_WQu4wSu2iIaTCjYPEd_htgZt/exec'    // 例：https://script.google.com/macros/s/XXXX/exec
+  GAS_URL: 'https://script.google.com/macros/s/AKfycbxy66BGtciH5Fq1i7y0oNwLmKoqj9jsagS1egWkVa7QXYVR_MqN8SXdBQWLiVxOAmZ3/exec'    // 例：https://script.google.com/macros/s/XXXX/exec
 };
 /* 兩個值都留空 → 「預覽模式」，資料只存在這個頁面裡，可先試用 */
 
@@ -372,6 +379,7 @@ function computeContribution(fundEntries, settlements, members, groupWeights) {
 /* ═══════ 結算核心結束 ═══════ */
 
 
+const BUILD = '2026-11-27 b（防連按・＋存入／－領取・對帳可刪）';
 const DEMO = !CONFIG.LIFF_ID || !CONFIG.GAS_URL;
 const S = { me:null, members:[], books:[], records:[], fund:[], settlements:[], recon:[], summary:{},
   categories:[], beneficiaries:[], fundSources:FUND_SOURCES,
@@ -407,12 +415,32 @@ function lockTag(x){ return x.hidden?'<span class="lock">🔒不公開</span>':'
 const ROLE_NAME={admin:'管理員',member:'成員',viewer:'唯讀'};
 
 /* ═══════════ API ═══════════ */
+const READ_ACTIONS={me:1,list:1,receipt:1,preview:1};
+const _inflight=new Set(), _reqIds={};
+let _busyN=0;
+function busy(on){ _busyN=Math.max(0,_busyN+(on?1:-1)); $('#busy').classList.toggle('hidden', _busyN===0); }
+function newReqId(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,10); }
 async function api(action, payload={}){
+  if(READ_ACTIONS[action]){ api._fresh=null; return apiRaw(action, payload); }
+  // 寫入動作：同樣內容正在送出時，忽略重複點擊；整個畫面鎖住直到完成
+  const key=action+'|'+JSON.stringify(payload);
+  if(_inflight.has(key)) return new Promise(()=>{});
+  _inflight.add(key); busy(true);
+  const reqId=_reqIds[key]||(_reqIds[key]=newReqId());
+  try{
+    const r=await apiRaw(action, payload, reqId);
+    delete _reqIds[key]; return r;
+  }catch(e){
+    if(e.code!=='NETWORK') delete _reqIds[key];   // 網路中斷時保留編號，重試不會變兩筆
+    throw e;
+  }finally{ _inflight.delete(key); busy(false); }
+}
+async function apiRaw(action, payload={}, reqId){
   if(DEMO) return demoApi(action, payload);
   const token = liff.getAccessToken();
   let res, text, j;
   try{ res = await fetch(CONFIG.GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body: JSON.stringify(Object.assign({action, token}, payload)) }); }
+    body: JSON.stringify(Object.assign({action, token, reqId}, payload)) }); }
   catch(e){ const x=new Error('連不到後端（Apps Script）。請確認 GAS_URL 正確、手機網路正常。'); x.code='NETWORK'; throw x; }
   text = await res.text();
   try{ j = JSON.parse(text); }
@@ -426,6 +454,7 @@ async function api(action, payload={}){
     const e=new Error(j.message); e.code=j.code; throw e;
   }
   try{ sessionStorage.removeItem('cl_relogin'); }catch(e){}
+  api._fresh = j.state || null;   // 寫入後後端直接帶回最新資料，省一次往返
   return j.data;
 }
 function reloginTriedRecently(){ try{ const t=Number(sessionStorage.getItem('cl_relogin')||0); return Date.now()-t < 120000; }catch(e){ return true; } }
@@ -480,7 +509,7 @@ function showFatal(e){
   diagnose().then(h=>{ $('#diag').innerHTML=h; });
 }
 
-async function reload(){ Object.assign(S, await api('list')); S.preview=null; render(); }
+async function reload(){ const f=api._fresh; api._fresh=null; Object.assign(S, f || await api('list')); S.preview=null; render(); }
 
 /* ═══════════ 啟動 ═══════════ */
 async function start(){
@@ -533,11 +562,12 @@ function renderPending(){
 /* ═══════════ 畫面切換 ═══════════ */
 document.querySelectorAll('nav button[data-tab]').forEach(b=>b.onclick=()=>{ S.tab=b.dataset.tab; render(); window.scrollTo(0,0); });
 $('#addBtn').onclick=()=>{ if(!canWrite()) return toast(S.me.role==='viewer'?'唯讀成員只能查看':'這本帳已封存');
-  S.tab==='fund'?openFundForm('存入'):openForm(); };
+  openForm(); };
 
 function render(){
   document.querySelectorAll('nav button[data-tab]').forEach(b=>b.classList.toggle('on', b.dataset.tab===S.tab));
   $('#addBtn').style.opacity = canWrite()?1:.35;
+  $('#addBtn').classList.toggle('hidden', S.tab!=='list');
   renderWho();
   const f = {list:renderList, settle:renderSettle, fund:renderFund, members:renderMembers}[S.tab];
   $('#main').innerHTML = demoBar() + (S.tab==='members'?'':bookBar()) + f();
@@ -677,7 +707,7 @@ function renderSettle(){
     ${c.fundDirect?`<div class="kv"><span>${esc(fundShort())}直接付款</span><span>${money(c.fundDirect)}</span></div>`:''}
     ${c.estateDirect?`<div class="kv"><span>爸爸帳戶直接付款</span><span>${money(c.estateDirect)}</span></div>`:''}
     <div class="kv"><span>家人墊付</span><span>${money(c.memberPaid)}</span></div>
-    ${c.received?`<div class="kv"><span>家人已從爸爸帳戶領取</span><span>${money(c.received)}</span></div>`:''}
+    ${c.received?`<div class="kv"><span>家人已從專戶領取</span><span>${money(c.received)}</span></div>`:''}
     ${usesFund?`<div class="kv"><span>專戶撥還家人</span><span class="pos">${money(c.fundReimburse)}</span></div>
       <div class="kv"><span>專戶目前餘額</span><span>${money((sumOf().fund||{}).balance||0)}</span></div>`:''}
     ${c.mode==='estate'?`<div class="kv"><span>列為遺產清償</span><span>${money(c.estateClaimTotal)}</span></div>`
@@ -744,8 +774,8 @@ function renderFund(){
     ${f.transferredOut?`<div class="sub" style="margin-top:6px">已轉出到其他帳本 ${money(f.transferredOut)}</div>`:''}
     ${avg>0?`<div class="sub" style="margin-top:8px">近 3 個月平均每月支出 ${money(avg)}，餘額約可支應 ${(Math.max(0,f.balance)/avg).toFixed(1)} 個月</div>`:''}</div>`;
   if(low) html += `<div class="card warn">⚠️ 專戶餘額低於提醒水位 ${money(bs().lowBalance)}，請依約定比例補充資金（見下方「出資平衡」）。</div>`;
-  if(canWrite()) html += `<div class="row2" style="margin-bottom:12px"><button class="btn" data-act="fundAdd">＋ 登記存入</button>
-    <button class="btn ghost" data-act="recvAdd">登記領取</button></div>
+  if(canWrite()) html += `<div class="row2" style="margin-bottom:12px"><button class="btn" data-act="fundAdd">＋ 存入</button>
+    <button class="btn ghost" data-act="recvAdd">－ 領取</button></div>
     <p class="hint" style="margin-top:-6px">「領取」：家人直接從爸爸帳戶拿出來的錢（例如賣股票款）。結算時會和他墊付的金額相抵。</p>`;
   const ct = sumOf().contribution;
   if(ct && ct.rows.length && ct.total>0){
@@ -760,7 +790,7 @@ function renderFund(){
      <div class="bar" style="width:${Math.max(2,v/src[0][1]*100)}%;background:var(--ok)"></div></div>`).join('') : '<p class="hint">還沒有存入紀錄。每筆存入都要登記資金來源。</p>'}</div>`;
   const rc = S.recon.filter(r=>r.bookId===book().id).sort((a,b)=>b.date.localeCompare(a.date));
   html += `<div class="card"><h3>銀行對帳${isAdmin()?'<button class="mini" data-act="recon">輸入銀行餘額</button>':''}</h3>
-    ${rc.length? rc.slice(0,6).map(r=>`<div class="kv"><span>${esc(r.date)}</span><span>銀行 ${money(r.bankBalance)}／帳本 ${money(r.ledgerBalance)}
+    ${rc.length? rc.slice(0,6).map(r=>`<div class="kv" ${isAdmin()?`data-rc="${esc(r.id)}" style="cursor:pointer"`:''}><span>${esc(r.date)}</span><span>銀行 ${money(r.bankBalance)}／帳本 ${money(r.ledgerBalance)}
       ${Math.abs(r.diff)<1?'<span class="pos">✓ 相符</span>':`<span class="neg">差 ${signed(r.diff)}</span>`}</span></div>`).join('')
       :'<p class="hint">每月一次，把銀行 App 看到的實際餘額輸入進來，帳本會自動比對。</p>'}</div>`;
   const items = [...bookFund().map(x=>({kind:x.type, date:x.date, x})),
@@ -772,7 +802,7 @@ function renderFund(){
     const x=it.x;
     if(it.kind==='存入') html += row(`data-fund="${esc(x.id)}"`, x.createdBy===S.me.userId, `<span class="tag src">${esc(x.source)}</span>${esc(x.sourceDetail||'存入')}${lockTag(x)}`,
       `${esc(x.date)}　${x.memberId?'出資：'+esc(memberName(x.memberId))+'　':''}${x.account?'帳戶 '+esc(x.account)+'　':''}登記：${esc(x.createdByName)}`, '+'+num(x.amount), 'in');
-    else if(it.kind==='領取') html += row(`data-fund="${esc(x.id)}"`, x.createdBy===S.me.userId, `<span class="tag" style="background:var(--warn-soft);color:var(--warn)">領取</span>${esc(memberName(x.memberId))} 從爸爸帳戶領取${lockTag(x)}`,
+    else if(it.kind==='領取') html += row(`data-fund="${esc(x.id)}"`, x.createdBy===S.me.userId, `<span class="tag" style="background:var(--warn-soft);color:var(--warn)">領取</span>${esc(memberName(x.memberId))} 從專戶領取${lockTag(x)}`,
       `${esc(x.date)}　${esc(x.note||'')}${x.settlementId?'　・已結算':''}`, num(x.amount), '');
     else if(it.kind==='撥付') html += row('', false, `撥還 ${esc(memberName(x.memberId))}`, `${esc(x.date)}　${esc(x.note)}`, '−'+num(x.amount), 'out');
     else if(it.kind==='退回') html += row('', false, `${esc(memberName(x.memberId))} 退回專戶`, `${esc(x.date)}　${esc(x.note)}`, '+'+num(x.amount), 'in');
@@ -781,6 +811,18 @@ function renderFund(){
   }
   html += `</div><p class="hint">・存入：每筆都要登記資金來源；「家人出資」會記在出資人那一家。<br>・撥付、退回、結餘轉出由系統自動產生，不能手動修改。<br>・帳戶只填末 4 碼。</p>`;
   return html;
+}
+function openReconItem(id){
+  const r=S.recon.find(x=>x.id===id); if(!r) return;
+  modal(`<h2>對帳紀錄<button data-close>✕</button></h2>
+    <div class="kv"><span>日期</span><span>${esc(r.date)}</span></div>
+    <div class="kv"><span>銀行餘額</span><span>${money(r.bankBalance)}</span></div>
+    <div class="kv"><span>當時帳本餘額</span><span>${money(r.ledgerBalance)}</span></div>
+    <div class="kv"><span>差額</span><span>${signed(r.diff)}</span></div>
+    ${r.note?`<div class="kv"><span>備註</span><span>${esc(r.note)}</span></div>`:''}
+    <button class="btn danger" id="rcDel" style="margin-top:12px">刪除這筆對帳紀錄</button>`);
+  $('#rcDel').onclick=async()=>{ if(!confirm('確定刪除這筆對帳紀錄？（不影響帳本餘額）')) return;
+    try{ await api('reconRemove',{id}); closeModal(); toast('已刪除'); await reload(); }catch(e){ toast(e.message); } };
 }
 function openRecon(){
   modal(`<h2>銀行對帳<button data-close>✕</button></h2>
@@ -799,7 +841,7 @@ function openFundForm(type, x){
   const e = x || { date:today(), amount:'', source:'', sourceDetail:'', account:'', note:'', memberId:S.me.userId };
   let source = e.source;
   const members = activeMembers().filter(m=>m.role!=='viewer');
-  modal(`<h2>${x?'修改':''}${isRecv?'登記從爸爸帳戶領取':'登記存入專戶'}<button data-close>✕</button></h2>
+  modal(`<h2>${x?'修改':''}${isRecv?'登記從專戶領取':'登記存入專戶'}<button data-close>✕</button></h2>
     <div class="field"><label>金額</label><input id="gAmt" class="amount-input" type="number" inputmode="numeric" min="1" placeholder="0" value="${esc(e.amount)}"></div>
     ${isRecv?`<div class="field"><label>誰領取</label><select id="gMem" ${isAdmin()?'':'disabled'}>${members.map(m=>`<option value="${esc(m.userId)}" ${m.userId===e.memberId?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div>
       <div class="field"><label>說明</label><input id="gNote" maxlength="300" placeholder="例：賣股票款，用來支付禮儀公司" value="${esc(e.note)}"></div>`
@@ -932,7 +974,8 @@ function renderMembers(){
     ・每個人只能修改、刪除自己建立的資料，別人的只能看。<br>
     ・唯讀成員（例如舅舅、阿姨）可以看帳，不能記帳。<br>
     ・管理員負責核准成員、分家庭、設定比例與結算方式、執行結算、對帳、封存帳本，也可以把敏感紀錄設為不公開。<br>
-    ・結算後的紀錄會鎖定；需要更正時，管理員可撤銷最近一次結算。</p></div>`;
+    ・結算後的紀錄會鎖定；需要更正時，管理員可撤銷最近一次結算。</p></div>
+    <p class="hint" style="text-align:center">網頁版本：${esc(BUILD)}</p>`;
   return html;
 }
 async function memberAct(op, uid){
@@ -969,6 +1012,7 @@ function bindTab(){
   m.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{ S.cat=b.dataset.cat; render(); });
   m.querySelectorAll('.rec[data-id]').forEach(b=>b.onclick=()=>openDetail(b.dataset.id));
   m.querySelectorAll('[data-fund]').forEach(b=>b.onclick=()=>openFundDetail(b.dataset.fund));
+  m.querySelectorAll('[data-rc]').forEach(b=>b.onclick=()=>openReconItem(b.dataset.rc));
   m.querySelectorAll('[data-mem]').forEach(b=>b.onclick=()=>memberAct(b.dataset.mem, b.dataset.uid));
   m.querySelectorAll('[data-undo]').forEach(b=>b.onclick=()=>undoSettle(b.dataset.undo));
   m.querySelectorAll('[data-grp]').forEach(b=>b.onclick=()=>openGroupForm(b.dataset.grp));
@@ -1097,9 +1141,24 @@ function exportCsv(){
   const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
   const lines=[['帳本','日期','項目','金額','類別','照護對象','付款人','備註','結算狀態','記錄者'].map(q).join(',')]
     .concat(rs.map(r=>[book().name,r.date,r.item,r.amount,r.category,r.beneficiary,memberName(r.payerId),r.note,r.status,r.createdByName].map(q).join(',')));
-  const blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-  a.download=`${book().name}_${S.month==='all'?'全部':S.month}.csv`; a.click();
+  const csv='﻿'+lines.join('\r\n'), fname=`${book().name}_${S.month==='all'?'全部':S.month}.csv`;
+  let inLine=false; try{ inLine = !DEMO && typeof liff!=='undefined' && liff.isInClient(); }catch(e){}
+  if(inLine) return csvInLine(csv, fname);
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=fname; a.click();
+}
+// LINE 內建瀏覽器不能下載檔案：提供「複製」與「用瀏覽器開啟」兩種方式
+function csvInLine(csv, fname){
+  modal(`<h2>匯出清單<button data-close>✕</button></h2>
+    <p class="hint">LINE 裡面無法直接下載檔案。可以：<br>① 按「複製」，貼到 Excel／Google 試算表／記事本；<br>② 按「用瀏覽器開啟」，在 Chrome／Safari 裡再按一次匯出就能下載。</p>
+    <textarea id="csvTxt" readonly style="width:100%;height:150px;font-size:12px;border:1px solid var(--line);border-radius:10px;padding:8px">${esc(csv.slice(1))}</textarea>
+    <div class="row2" style="margin-top:10px"><button class="btn" id="csvCopy">複製</button>
+    <button class="btn ghost" id="csvOpen">用瀏覽器開啟</button></div>`);
+  $('#csvCopy').onclick=async()=>{ const t=$('#csvTxt'); let okc=false;
+    try{ await navigator.clipboard.writeText(csv.slice(1)); okc=true; }catch(e){}
+    if(!okc){ try{ t.focus(); t.select(); t.setSelectionRange(0,t.value.length); okc=document.execCommand('copy'); }catch(e){} }
+    toast(okc?'已複製，可貼到試算表':'請長按文字框全選後複製'); };
+  $('#csvOpen').onclick=()=>{ try{ liff.openWindow({url:location.href.split('#')[0], external:true}); }catch(e){ toast('無法開啟瀏覽器'); } };
 }
 
 /* ═══════════ 預覽模式：在瀏覽器裡執行真正的後端程式（資料只存在記憶體） ═══════════ */
@@ -1166,7 +1225,7 @@ var FUND_COLS = ['id', 'bookId', 'date', 'type', 'source', 'sourceDetail', 'acco
   'settlementId', 'hidden', 'createdBy', 'createdAt', 'updatedAt', 'deleted'];
 var SET_COLS = ['id', 'bookId', 'label', 'cutoff', 'mode', 'total', 'fundTotal', 'familyShare', 'recordCount',
   'detail', 'state', 'createdBy', 'createdAt'];
-var RECON_COLS = ['id', 'bookId', 'date', 'bankBalance', 'ledgerBalance', 'diff', 'note', 'createdBy', 'createdAt'];
+var RECON_COLS = ['id', 'bookId', 'date', 'bankBalance', 'ledgerBalance', 'diff', 'note', 'createdBy', 'createdAt', 'deleted'];
 var LOG_COLS = ['time', 'userId', 'name', 'action', 'refId', 'detail'];
 
 var DEFAULT_BOOKS = [
@@ -1366,10 +1425,29 @@ function doPost(e) {
     if (!openToPending[req.action] && me.state !== 'active') throw err_('PENDING', '帳號尚待管理員核准');
     var readOnly = { me: 1, list: 1, receipt: 1, rename: 1, preview: 1 };
     if (!readOnly[req.action] && me.role === 'viewer') throw err_('FORBIDDEN', '你是唯讀成員，只能查看');
-    return json_({ ok: true, data: fn(me, req) });
+    var isWrite = !readOnly[req.action];
+    var rid = isWrite && req.reqId ? String(req.reqId).slice(0, 40) : '';
+    if (rid && !claimReq_(rid)) {            // 同一個動作編號已處理過（連按、網路重試）→ 不重複寫入
+      return json_({ ok: true, data: { duplicate: true }, state: bootstrap_(me) });
+    }
+    var data;
+    try { data = fn(me, req); }
+    catch (x) { if (rid) CacheService.getScriptCache().remove('rq_' + rid); throw x; }
+    var res = { ok: true, data: data };
+    if (isWrite && req.action !== 'rename' && me.state === 'active') res.state = bootstrap_(me);   // 一併帶回最新資料
+    return json_(res);
   } catch (x) {
     return json_({ ok: false, code: x.code || 'ERROR', message: x.message || String(x) });
   }
+}
+function claimReq_(id) {
+  var lock = LockService.getScriptLock(); lock.waitLock(15000);
+  try {
+    var c = CacheService.getScriptCache();
+    if (c.get('rq_' + id)) return false;
+    c.put('rq_' + id, '1', 21600);
+    return true;
+  } finally { lock.releaseLock(); }
 }
 
 var ACTIONS = {
@@ -1379,7 +1457,7 @@ var ACTIONS = {
   fundAdd: fundAdd_, fundUpdate: fundUpdate_, fundRemove: fundRemove_,
   setHidden: setHidden_, rename: renameSelf_, member: adminMember_,
   bookSettings: bookSettings_, closeBook: closeBook_, reopenBook: reopenBook_,
-  preview: preview_, settle: settle_, undoSettle: undoSettle_, recon: recon_,
+  preview: preview_, settle: settle_, undoSettle: undoSettle_, recon: recon_, reconRemove: reconRemove_,
   groupSave: groupSave_, groupDelete: groupDelete_
 };
 
@@ -1528,7 +1606,7 @@ function bootstrap_(me) {
     .map(function (f) { f.createdByName = names[f.createdBy] || '（已離開）'; return f; });
   out.settlements = sets.map(function (s) {
     s.createdByName = names[s.createdBy] || ''; return s; });
-  out.recon = readAll_(sheet_('Recon', RECON_COLS), RECON_COLS).map(function (r) {
+  out.recon = readAll_(sheet_('Recon', RECON_COLS), RECON_COLS).filter(function (r) { return !isTrue_(r.deleted); }).map(function (r) {
     return { id: r.id, bookId: r.bookId, date: fmtDate_(r.date), bankBalance: Number(r.bankBalance),
       ledgerBalance: Number(r.ledgerBalance), diff: Number(r.diff), note: r.note, createdByName: names[r.createdBy] || '' };
   });
@@ -1884,10 +1962,23 @@ function recon_(me, req) {
   var fund = fund_().map(publicFund_).filter(function (f) { return f.bookId === b.id; });
   var ledger = computeFundSummary(fund, recs).balance;
   var row = { id: Utilities.getUuid(), bookId: b.id, date: date, bankBalance: bank, ledgerBalance: ledger,
-    diff: bank - ledger, note: String(req.note || '').slice(0, 200), createdBy: me.userId, createdAt: new Date().toISOString() };
+    diff: bank - ledger, note: String(req.note || '').slice(0, 200), createdBy: me.userId, createdAt: new Date().toISOString(), deleted: false };
   withLock_(function () { sheet_('Recon', RECON_COLS).appendRow(RECON_COLS.map(function (k) { return row[k]; })); });
   log_(me, 'recon', row.id, b.name + ' 銀行 ' + bank + ' 帳本 ' + ledger);
   return row;
+}
+
+function reconRemove_(me, req) {
+  requireAdmin_(me);
+  return withLock_(function () {
+    var sh = sheet_('Recon', RECON_COLS), all = readAll_(sh, RECON_COLS), r = null;
+    all.forEach(function (x) { if (x.id === req.id) r = x; });
+    if (!r || isTrue_(r.deleted)) throw err_('NOT_FOUND', '找不到這筆對帳紀錄');
+    r.deleted = true;
+    writeRow_(sh, r._row, RECON_COLS, r);
+    log_(me, 'recon_delete', r.id, '銀行 ' + r.bankBalance + ' 帳本 ' + r.ledgerBalance);
+    return { id: r.id };
+  });
 }
 
 /* ───────────── 成員 ───────────── */
