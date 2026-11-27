@@ -379,7 +379,7 @@ function computeContribution(fundEntries, settlements, members, groupWeights) {
 /* ═══════ 結算核心結束 ═══════ */
 
 
-const BUILD = '2026-11-27 b（防連按・＋存入／－領取・對帳可刪）';
+const BUILD = '2026-11-27 c（畫面即時更新・後端加速）';
 const DEMO = !CONFIG.LIFF_ID || !CONFIG.GAS_URL;
 const S = { me:null, members:[], books:[], records:[], fund:[], settlements:[], recon:[], summary:{},
   categories:[], beneficiaries:[], fundSources:FUND_SOURCES,
@@ -420,12 +420,12 @@ const _inflight=new Set(), _reqIds={};
 let _busyN=0;
 function busy(on){ _busyN=Math.max(0,_busyN+(on?1:-1)); $('#busy').classList.toggle('hidden', _busyN===0); }
 function newReqId(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,10); }
-async function api(action, payload={}){
+async function api(action, payload={}, opts={}){
   if(READ_ACTIONS[action]){ api._fresh=null; return apiRaw(action, payload); }
   // 寫入動作：同樣內容正在送出時，忽略重複點擊；整個畫面鎖住直到完成
   const key=action+'|'+JSON.stringify(payload);
   if(_inflight.has(key)) return new Promise(()=>{});
-  _inflight.add(key); busy(true);
+  _inflight.add(key); if(!opts.quiet) busy(true);
   const reqId=_reqIds[key]||(_reqIds[key]=newReqId());
   try{
     const r=await apiRaw(action, payload, reqId);
@@ -433,7 +433,7 @@ async function api(action, payload={}){
   }catch(e){
     if(e.code!=='NETWORK') delete _reqIds[key];   // 網路中斷時保留編號，重試不會變兩筆
     throw e;
-  }finally{ _inflight.delete(key); busy(false); }
+  }finally{ _inflight.delete(key); if(!opts.quiet) busy(false); }
 }
 async function apiRaw(action, payload={}, reqId){
   if(DEMO) return demoApi(action, payload);
@@ -509,6 +509,33 @@ function showFatal(e){
   diagnose().then(h=>{ $('#diag').innerHTML=h; });
 }
 
+/* 樂觀更新：先把新紀錄顯示在畫面上，再在背景送出；失敗就還原並顯示原因 */
+function optimistic(kind, item){
+  const id='tmp_'+Date.now().toString(36); item.id=id; item.createdBy=S.me.userId; item.createdByName=S.me.name; item.createdAt=new Date().toISOString();
+  const sm=(S.summary[item.bookId]=S.summary[item.bookId]||{}); const f=(sm.fund=sm.fund||{balance:0,deposits:0,returned:0,payouts:0,direct:0,transferredOut:0,bySource:{}});
+  if(kind==='fund'){ S.fund.push(item);
+    if(item.type==='存入'){ f.deposits+=item.amount; f.balance+=item.amount; f.bySource=Object.assign({},f.bySource); f.bySource[item.source]=(f.bySource[item.source]||0)+item.amount; } }
+  else { S.records.push(item); if(item.payerId===FUND_ID){ f.direct+=item.amount; f.balance-=item.amount; } }
+  return id;
+}
+async function submitOptimistic(kind, item, action, payload){
+  optimistic(kind, item); closeModal(); render();
+  toast('已記下，同步中…');
+  try{ await api(action, payload, {quiet:true}); toast('已儲存'); }
+  catch(e){ if(e.code==='RELOGIN') return; toast('沒有儲存成功：'+e.message); }
+  await reload();
+}
+/* 刪除／修改也先更新畫面，背景同步；失敗時顯示原因並以伺服器資料為準 */
+function bumpRecord(r,sign){ if(!r||r.payerId!==FUND_ID) return; const f=((S.summary[r.bookId]=S.summary[r.bookId]||{}).fund=(S.summary[r.bookId]||{}).fund||{balance:0,direct:0,bySource:{}}); f.direct+=sign*r.amount; f.balance-=sign*r.amount; }
+function bumpFund(e,sign){ if(!e||e.type!=='存入') return; const f=((S.summary[e.bookId]=S.summary[e.bookId]||{}).fund=(S.summary[e.bookId]||{}).fund||{balance:0,deposits:0,bySource:{}});
+  f.deposits+=sign*e.amount; f.balance+=sign*e.amount; f.bySource=Object.assign({},f.bySource); f.bySource[e.source]=Math.max(0,(f.bySource[e.source]||0)+sign*e.amount); if(!f.bySource[e.source]) delete f.bySource[e.source]; }
+async function bg(action, payload, apply, okMsg){
+  closeModal(); apply(); toast(okMsg); render();
+  try{ await api(action, payload, {quiet:true}); }
+  catch(e){ if(e.code==='RELOGIN') return; toast('沒有儲存成功：'+e.message); }
+  await reload();
+}
+const isTmp=id=>String(id).indexOf('tmp_')===0;
 async function reload(){ const f=api._fresh; api._fresh=null; Object.assign(S, f || await api('list')); S.preview=null; render(); }
 
 /* ═══════════ 啟動 ═══════════ */
@@ -857,19 +884,28 @@ function openFundForm(type, x){
     $('#modal').querySelectorAll('[data-s]').forEach(y=>y.classList.toggle('on', y===b));
     $('#gMemF').classList.toggle('hidden', source!=='家人出資'); });
   $('#gSave').onclick=async()=>{
+    if(!$('#gAmt')) return;   // 已送出、視窗已關閉
     const entry={ amount:Number($('#gAmt').value), date:$('#gDate').value, note:$('#gNote').value.trim() };
     if(!(entry.amount>0)) return toast('請輸入金額');
     if(isRecv){ entry.memberId=$('#gMem').value; }
     else { if(!source) return toast('請選擇資金來源'); entry.source=source; entry.sourceDetail=$('#gDetail').value.trim(); entry.account=$('#gAcct').value.trim();
       if(source==='家人出資') entry.memberId=$('#gMem').value;
       if(/\d{7,}/.test(entry.account.replace(/[\s-]/g,''))) return toast('帳號請只填末 4 碼'); }
-    try{ if(x) await api('fundUpdate',{id:x.id, entry}); else await api('fundAdd',{bookId:book().id, type:isRecv?'領取':'存入', entry});
-      closeModal(); toast(x?'已修改':'已登記 '+money(entry.amount)); S.tab='fund'; await reload(); }catch(err){ toast(err.message); }
+    if(!x){
+      S.tab='fund';
+      const it=Object.assign({ bookId:book().id, type:isRecv?'領取':'存入', source:'', sourceDetail:'', account:'', memberId:'', note:'', settlementId:'',
+        hidden: isRecv && !!bs().hideReceiveDefault }, entry);
+      return submitOptimistic('fund', it, 'fundAdd', {bookId:book().id, type:isRecv?'領取':'存入', entry});
+    }
+    S.tab='fund';
+    bg('fundUpdate',{id:x.id, entry}, ()=>{ bumpFund(x,-1); Object.assign(x, entry);
+      if(x.type==='存入' && x.source!=='家人出資') x.memberId=''; bumpFund(x,1); }, '已修改');
   };
   if($('#gDel')) $('#gDel').onclick=async()=>{ if(!confirm('確定刪除這筆紀錄？')) return;
-    try{ await api('fundRemove',{id:x.id}); closeModal(); toast('已刪除'); await reload(); }catch(err){ toast(err.message); } };
+    bg('fundRemove',{id:x.id}, ()=>{ S.fund=S.fund.filter(f=>f.id!==x.id); bumpFund(x,-1); }, '已刪除'); };
 }
 function openFundDetail(id){
+  if(isTmp(id)) return toast('同步中，請稍候再點');
   const x = S.fund.find(f=>f.id===id); if(!x) return;
   if(x.createdBy===S.me.userId && canWrite() && !x.settlementId && x.source!=='上一本結餘') return openFundForm(x.type, x);
   modal(`<h2>${x.type==='領取'?'領取紀錄':'存入紀錄'}<button data-close>✕</button></h2>
@@ -1082,6 +1118,7 @@ function openForm(rec){
   $('#fPhoto').onchange=async e=>{ const f=e.target.files[0]; if(!f) return;
     try{ receipt = await shrinkImage(f); $('#fPrev').src=receipt; $('#fPrev').classList.remove('hidden'); }catch(x){ toast('無法讀取圖片'); } };
   $('#fSave').onclick=async()=>{
+    if(!$('#fAmt')) return;
     const data = { amount:Number($('#fAmt').value), item:$('#fItem').value.trim(), category:cat, beneficiary:ben,
       date:$('#fDate').value, payerId:$('#fPayer').value, note:$('#fNote').value.trim() };
     if(!(data.amount>0)) return toast('請輸入金額');
@@ -1089,13 +1126,14 @@ function openForm(rec){
     if(!data.category) return toast('請選擇類別');
     if(!data.date) return toast('請選擇日期');
     const removeReceipt = !!($('#fRmPhoto') && $('#fRmPhoto').checked);
-    const btn=$('#fSave'); btn.disabled=true; btn.textContent='儲存中…';
-    try{
-      if(rec) await api('update',{id:rec.id, record:data, receipt, removeReceipt});
-      else await api('add',{bookId:book().id, record:data, receipt});
-      closeModal(); toast(rec?'已修改':'已記下 '+money(data.amount));
-      S.month = data.date.slice(0,7); S.tab='list'; S.listView='list'; await reload();
-    }catch(e){ toast(e.message); btn.disabled=false; btn.textContent=rec?'儲存修改':'記下來'; }
+    if(!rec){
+      S.month = data.date.slice(0,7); S.tab='list'; S.listView='list';
+      const it=Object.assign({ bookId:book().id, beneficiary:ben, status:'待對帳', hasReceipt:!!receipt, hidden:false, settlementId:'' }, data);
+      return submitOptimistic('rec', it, 'add', {bookId:book().id, record:data, receipt});
+    }
+    S.month = data.date.slice(0,7); S.tab='list'; S.listView='list';
+    bg('update',{id:rec.id, record:data, receipt, removeReceipt}, ()=>{
+      bumpRecord(rec,-1); Object.assign(rec, data, {hasReceipt: receipt?true:(removeReceipt?false:rec.hasReceipt)}); bumpRecord(rec,1); }, '已修改');
   };
 }
 function shrinkImage(file){
@@ -1108,6 +1146,7 @@ function shrinkImage(file){
     img.onerror=no; img.src=url; });
 }
 function openDetail(id){
+  if(isTmp(id)) return toast('同步中，請稍候再點');
   const r = S.records.find(x=>x.id===id); if(!r) return;
   const mine = r.createdBy===S.me.userId, locked = r.status==='已結清';
   let btns='';
@@ -1133,7 +1172,7 @@ function openDetail(id){
     catch(e){ toast(e.message); $('#dRcpt').textContent='📎 查看收據'; } };
   if($('#dEdit')) $('#dEdit').onclick=()=>openForm(r);
   if($('#dDel')) $('#dDel').onclick=async()=>{ if(!confirm(`確定刪除「${r.item} ${money(r.amount)}」？`)) return;
-    try{ await api('remove',{id}); closeModal(); toast('已刪除'); await reload(); }catch(e){ toast(e.message); } };
+    bg('remove',{id}, ()=>{ S.records=S.records.filter(x=>x.id!==id); bumpRecord(r,-1); }, '已刪除'); };
 }
 function exportCsv(){
   let rs = monthRecords(); if(S.mineOnly) rs=rs.filter(r=>r.createdBy===S.me.userId); if(S.cat) rs=rs.filter(r=>r.category===S.cat);
@@ -1173,7 +1212,7 @@ const DEMO_USERS = [
 let demoToken = 't_admin';
 const DemoServer = (function(){
   const sheets = {}, props = { LINE_CHANNEL_ID:'demo', SHEET_ID:'demo' }, files = {};
-  function mkSheet(){ const data=[]; return {
+  function mkSheet(name){ const data=[]; return { getName:()=>name,
     getLastRow:()=>data.length, getMaxRows:()=>1000,
     getRange:(r,c,nr,nc)=>({
       setValues(v){ v.forEach((row,i)=>{ data[r-1+i]=data[r-1+i]||[]; row.forEach((x,j)=>data[r-1+i][c-1+j]=x); }); return this; },
@@ -1181,7 +1220,7 @@ const DemoServer = (function(){
       setFontWeight(){ return this; }, setNumberFormat(){ return this; } }),
     appendRow:(row)=>data.push(row.slice()), setFrozenRows(){} }; }
   const uuid=()=> 'x'+Math.random().toString(36).slice(2)+Date.now().toString(36);
-  const SpreadsheetApp = { openById:()=>({ getSheetByName:n=>sheets[n], insertSheet:n=>(sheets[n]=mkSheet()) }) };
+  const SpreadsheetApp = { openById:()=>({ getSheetByName:n=>sheets[n], insertSheet:n=>(sheets[n]=mkSheet(n)) }) };
   const PropertiesService = { getScriptProperties:()=>({ getProperty:k=>props[k]||null, setProperty:(k,v)=>{ props[k]=v; } }) };
   const CacheService = { getScriptCache:()=>({ get:()=>null, put(){} }) };
   const LockService = { getScriptLock:()=>({ waitLock(){}, releaseLock(){} }) };
@@ -1416,7 +1455,9 @@ function doGet() {
 }
 
 function doPost(e) {
+  MEMO_ = {};
   try {
+    SS_ = null; SHEETS_ = {}; MEMO_ = {};
     var req = JSON.parse(e.postData.contents || '{}');
     var me = auth_(req.token);
     var fn = ACTIONS[req.action];
@@ -2097,8 +2138,10 @@ function receiptFolder_() {
 
 function ss_() { var id = prop_('SHEET_ID'); return id ? SpreadsheetApp.openById(id) : SpreadsheetApp.getActiveSpreadsheet(); }
 
+var SS_ = null, SHEETS_ = {};   // 同一次請求內只開一次試算表、每張工作表只查一次
 function sheet_(name, cols) {
-  var ss = ss_(), sh = ss.getSheetByName(name);
+  if (SHEETS_[name]) return SHEETS_[name];
+  var ss = SS_ || (SS_ = ss_()), sh = ss.getSheetByName(name);
   if (!sh) {
     sh = ss.insertSheet(name);
     sh.getRange(1, 1, 1, cols.length).setValues([cols]).setFontWeight('bold');
@@ -2108,16 +2151,22 @@ function sheet_(name, cols) {
       if (i >= 0) sh.getRange(1, i + 1, sh.getMaxRows(), 1).setNumberFormat('@');
     });
   }
+  SHEETS_[name] = sh;
   return sh;
 }
+var MEMO_ = {};   // 同一次請求內重複讀同一張表時重用結果（寫入後自動失效）
 function readAll_(sh, cols) {
-  var n = sh.getLastRow() - 1;
+  var last = sh.getLastRow(), n = last - 1;
   if (n < 1) return [];
-  return sh.getRange(2, 1, n, cols.length).getValues().map(function (row, i) {
+  var key = (sh.getName ? sh.getName() : '') + '|' + last + '|' + cols.length;
+  var raw = MEMO_[key];
+  if (!raw) raw = MEMO_[key] = sh.getRange(2, 1, n, cols.length).getValues();
+  return raw.map(function (row, i) {
     var o = { _row: i + 2 }; cols.forEach(function (c, j) { o[c] = row[j]; }); return o;
   });
 }
 function writeRow_(sh, rowNum, cols, obj) {
+  MEMO_ = {};
   sh.getRange(rowNum, 1, 1, cols.length).setValues([cols.map(function (c) { return obj[c] === undefined ? '' : obj[c]; })]);
 }
 function withLock_(fn) {
