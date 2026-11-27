@@ -379,7 +379,7 @@ function computeContribution(fundEntries, settlements, members, groupWeights) {
 /* ═══════ 結算核心結束 ═══════ */
 
 
-const BUILD = '2026-11-27 c（畫面即時更新・後端加速）';
+const BUILD = '2026-11-27 d（對帳即時更新）';
 const DEMO = !CONFIG.LIFF_ID || !CONFIG.GAS_URL;
 const S = { me:null, members:[], books:[], records:[], fund:[], settlements:[], recon:[], summary:{},
   categories:[], beneficiaries:[], fundSources:FUND_SOURCES,
@@ -840,6 +840,7 @@ function renderFund(){
   return html;
 }
 function openReconItem(id){
+  if(isTmp(id)) return toast('同步中，請稍候再點');
   const r=S.recon.find(x=>x.id===id); if(!r) return;
   modal(`<h2>對帳紀錄<button data-close>✕</button></h2>
     <div class="kv"><span>日期</span><span>${esc(r.date)}</span></div>
@@ -849,7 +850,7 @@ function openReconItem(id){
     ${r.note?`<div class="kv"><span>備註</span><span>${esc(r.note)}</span></div>`:''}
     <button class="btn danger" id="rcDel" style="margin-top:12px">刪除這筆對帳紀錄</button>`);
   $('#rcDel').onclick=async()=>{ if(!confirm('確定刪除這筆對帳紀錄？（不影響帳本餘額）')) return;
-    try{ await api('reconRemove',{id}); closeModal(); toast('已刪除'); await reload(); }catch(e){ toast(e.message); } };
+    bg('reconRemove',{id}, ()=>{ S.recon=S.recon.filter(x=>x.id!==id); }, '已刪除'); };
 }
 function openRecon(){
   modal(`<h2>銀行對帳<button data-close>✕</button></h2>
@@ -860,8 +861,11 @@ function openRecon(){
     <p class="hint">帳本目前餘額：${money((sumOf().fund||{}).balance||0)}</p>
     <button class="btn" id="rcSave">比對</button>`);
   $('#rcSave').onclick=async()=>{ const v=$('#rcBal').value; if(v==='') return toast('請輸入餘額');
-    try{ const r=await api('recon',{bookId:book().id, date:$('#rcDate').value, bankBalance:Number(v), note:$('#rcNote').value});
-      closeModal(); toast(Math.abs(r.diff)<1?'✓ 銀行餘額與帳本相符':`差 ${signed(r.diff)} 元，請檢查漏記的紀錄`); await reload(); }catch(e){ toast(e.message); } };
+    const date=$('#rcDate').value, note=$('#rcNote').value, bookId=book().id;
+    const bank=Math.round(v), ledger=Math.round((sumOf().fund||{}).balance||0), diff=bank-ledger;
+    bg('recon',{bookId, date, bankBalance:Number(v), note}, ()=>{
+      S.recon.push({ id:'tmp_'+Date.now().toString(36), bookId, date, bankBalance:bank, ledgerBalance:ledger, diff, note, createdByName:S.me.name }); },
+      Math.abs(diff)<1?'✓ 銀行餘額與帳本相符':`差 ${signed(diff)} 元，請檢查漏記的紀錄`); };
 }
 function openFundForm(type, x){
   const isRecv = type==='領取';
